@@ -124,6 +124,8 @@ export default function Classroom() {
         startWithVideoMuted: false,
         disableDeepLinking: true,
         prejoinPageEnabled: false,
+        // Waiting-room gate: students knock, the host (teacher) approves
+        lobby: { enabled: true, autoKnock: true },
       },
       interfaceConfigOverwrite: {
         SHOW_JITSI_WATERMARK: false,
@@ -200,6 +202,9 @@ export default function Classroom() {
             Virtual Classroom
           </h1>
           <p className="text-slate-600 text-sm mt-1">Join or start live video classes.</p>
+          <p className="text-slate-400 text-xs mt-1">
+            Students joining a session wait in the waiting room until the host (teacher) admits them.
+          </p>
         </div>
 
         {/* Teacher: Start a New Class */}

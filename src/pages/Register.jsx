@@ -15,7 +15,7 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { user, emailConfirmed, signUp } = useAuth();
+  const { user, emailConfirmed, signUp, verifyStudentIdentity } = useAuth();
   const navigate = useNavigate();
 
   // Already logged in and verified
@@ -44,6 +44,19 @@ export default function Register() {
     setLoading(true);
 
     try {
+      // Gatekeeper: verify the student against the official roster before signup
+      const { data: verifiedData, error: verifyError } = await verifyStudentIdentity(
+        form.studentId.trim(),
+        form.fullName.trim(),
+        form.birthdate
+      );
+
+      if (verifyError) throw verifyError;
+      if (!verifiedData?.verified) {
+        setError(verifiedData?.reason || 'Your identity could not be verified. Please check your Student ID, name, and birthday.');
+        return;
+      }
+
       // Create Supabase Auth account and save all metadata
       const { error: signUpError } = await signUp(
         form.email.trim(),
@@ -85,6 +98,9 @@ export default function Register() {
         </h2>
         <p className="mt-2 text-center text-sm text-slate-600">
           Enter your student details to register
+        </p>
+        <p className="mt-1 text-center text-xs text-slate-400">
+          Your details are checked against the official student roster before an account is created.
         </p>
       </div>
 
