@@ -43,7 +43,7 @@ export default function RosterAndDockets() {
 
   useEffect(() => {
     if (profile) fetchData();
-  }, [fetchData]);
+  }, [fetchData, profile]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);

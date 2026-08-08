@@ -47,26 +47,48 @@ export function AuthProvider({ children }) {
         
       if (error) {
         // PGRST116 means no rows returned (profile doesn't exist yet)
-        if (error.code === 'PGRST116' && sessionUser?.user_metadata?.student_id) {
-          console.log('Profile missing, auto-creating from metadata using RPC...');
-          const { data: rpcData, error: rpcError } = await supabase.rpc('register_new_student', {
-            p_auth_id: userId,
-            p_student_id: sessionUser.user_metadata.student_id,
-            p_full_name: sessionUser.user_metadata.full_name,
-            p_birthdate: sessionUser.user_metadata.birthdate,
-            p_email: sessionUser.email
-          });
-            
-          if (!rpcError) {
-            // Fetch the newly created profile
-            const { data: newProfile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', userId)
-              .single();
-            setProfile(newProfile);
-            return;
-          } else {
+        if (error.code === 'PGRST116' && sessionUser?.user_metadata) {
+          const meta = sessionUser.user_metadata;
+
+          if (meta.role === 'teacher' && meta.full_name) {
+            console.log('Profile missing, auto-creating teacher profile using RPC...');
+            const { error: rpcError } = await supabase.rpc('register_new_teacher', {
+              p_auth_id: userId,
+              p_full_name: meta.full_name,
+              p_subject_code: meta.subject_code || 'ICT 101',
+              p_email: sessionUser.email
+            });
+
+            if (!rpcError) {
+              const { data: newProfile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', userId)
+                .single();
+              setProfile(newProfile);
+              return;
+            }
+            console.error('Failed to auto-create teacher profile:', rpcError);
+          } else if (meta.student_id) {
+            console.log('Profile missing, auto-creating from metadata using RPC...');
+            const { error: rpcError } = await supabase.rpc('register_new_student', {
+              p_auth_id: userId,
+              p_student_id: meta.student_id,
+              p_full_name: meta.full_name,
+              p_birthdate: meta.birthdate,
+              p_email: sessionUser.email
+            });
+
+            if (!rpcError) {
+              // Fetch the newly created profile
+              const { data: newProfile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', userId)
+                .single();
+              setProfile(newProfile);
+              return;
+            }
             console.error('Failed to auto-create profile:', rpcError);
           }
         }
@@ -113,6 +135,14 @@ export function AuthProvider({ children }) {
     return { data, error };
   };
 
+  // Send a password reset link
+  const resetPassword = async (email) => {
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    });
+    return { data, error };
+  };
+
   // Teacher sign in (keeping existing synthetic email approach)
   const signInAsTeacher = async (name, subjectCode) => {
     const cleanName = name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -149,6 +179,7 @@ export function AuthProvider({ children }) {
       signInAsTeacher,
       verifyStudentIdentity,
       resendVerificationEmail,
+      resetPassword,
     }}>
       {!loading && children}
     </AuthContext.Provider>

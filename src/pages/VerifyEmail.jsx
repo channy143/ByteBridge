@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Layout, Mail, CheckCircle, RefreshCw } from 'lucide-react';
+import { Mail, RefreshCw } from 'lucide-react';
+import AuthLayout from '../components/auth/AuthLayout';
+import AuthButton from '../components/auth/AuthButton';
 
 export default function VerifyEmail() {
   const location = useLocation();
@@ -36,77 +38,62 @@ export default function VerifyEmail() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <Layout className="h-12 w-12 text-primary-600" />
+    <AuthLayout showBack={false}>
+      <div className="text-center">
+        <div className="mx-auto flex items-center justify-center w-16 h-16 rounded-full bg-primary-50 mb-7">
+          <Mail className="w-8 h-8 text-primary-900" />
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900 tracking-tight">
+
+        <h1 className="text-[28px] font-bold text-slate-900 tracking-tight">
           Verify Your Email
-        </h2>
-      </div>
+        </h1>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow-xl shadow-slate-200/50 sm:rounded-xl sm:px-10 border border-slate-100 text-center">
-          
-          <div className="mx-auto flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-6">
-            <Mail className="w-8 h-8 text-green-600" />
-          </div>
+        <div className="mt-3 mx-auto w-12 h-[3px] bg-primary-600 rounded-full"></div>
 
-          <h3 className="text-lg font-bold text-slate-900 mb-2">
-            Account Created Successfully!
-          </h3>
+        <p className="mt-5 text-sm text-slate-500 leading-relaxed">
+          Account created successfully! Please check your email and click the verification link
+          to activate your account.
+        </p>
 
-          <p className="text-sm text-slate-600 mb-2">
-            Please check your email and click the verification link to activate your account.
+        {email ? (
+          <p className="mt-3 text-sm text-slate-400">
+            We sent a verification link to: <br />
+            <span className="font-medium text-slate-800">{email}</span>
           </p>
+        ) : (
+          <p className="mt-3 text-sm text-slate-400">
+            Please verify your email before accessing your account.
+          </p>
+        )}
 
-          {email && (
-            <p className="text-sm text-slate-500 mb-6">
-              We sent a verification link to: <br />
-              <span className="font-medium text-slate-800">{email}</span>
-            </p>
-          )}
-
-          {!email && (
-            <p className="text-sm text-slate-500 mb-6">
-              Please verify your email before accessing your account.
-            </p>
-          )}
-
-          {resendMessage && (
-            <div className={`mb-4 p-3 rounded-lg text-sm ${
-              resendMessage.includes('sent') 
-                ? 'bg-green-50 text-green-700 border border-green-200'
-                : 'bg-red-50 text-red-700 border border-red-200'
-            }`}>
-              {resendMessage}
-            </div>
-          )}
-
-          <div className="space-y-3">
-            {email && (
-              <button
-                onClick={handleResend}
-                disabled={resending}
-                className="w-full flex justify-center items-center py-2.5 px-4 border border-slate-300 rounded-lg shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-colors"
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${resending ? 'animate-spin' : ''}`} />
-                {resending ? 'Sending...' : 'Resend Verification Email'}
-              </button>
-            )}
-
-            <Link
-              to="/login"
-              onClick={handleBackToLogin}
-              className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
-            >
-              Back to Login
-            </Link>
+        {resendMessage && (
+          <div className={`mt-6 p-3 rounded-lg text-sm text-left ${
+            resendMessage.includes('sent')
+              ? 'bg-green-50 text-green-700 border border-green-100'
+              : 'bg-red-50 text-red-700 border border-red-100'
+          }`}>
+            {resendMessage}
           </div>
+        )}
 
+        <div className="mt-9 space-y-3">
+          {email && (
+            <AuthButton
+              variant="secondary"
+              loading={resending}
+              loadingText="Sending..."
+              onClick={handleResend}
+            >
+              <RefreshCw className={`w-4 h-4 ${resending ? 'animate-spin' : ''}`} />
+              Resend Verification Email
+            </AuthButton>
+          )}
+
+          <AuthButton onClick={handleBackToLogin}>
+            Back to Login
+          </AuthButton>
         </div>
       </div>
-    </div>
+    </AuthLayout>
   );
 }

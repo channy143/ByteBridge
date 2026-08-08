@@ -6,11 +6,10 @@ import AuthLayout from '../components/auth/AuthLayout';
 import AuthInput from '../components/auth/AuthInput';
 import AuthButton from '../components/auth/AuthButton';
 
-export default function Register() {
+export default function RegisterTeacher() {
   const [form, setForm] = useState({
-    studentId: '',
     fullName: '',
-    birthdate: '',
+    subjectCode: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -19,7 +18,7 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { user, emailConfirmed, signUp, verifyStudentIdentity } = useAuth();
+  const { user, emailConfirmed, signUp } = useAuth();
   const navigate = useNavigate();
 
   // Already logged in and verified
@@ -51,28 +50,14 @@ export default function Register() {
     setLoading(true);
 
     try {
-      // Gatekeeper: verify the student against the official roster before signup
-      const { data: verifiedData, error: verifyError } = await verifyStudentIdentity(
-        form.studentId.trim(),
-        form.fullName.trim(),
-        form.birthdate
-      );
-
-      if (verifyError) throw verifyError;
-      if (!verifiedData?.verified) {
-        setError(verifiedData?.reason || 'Your identity could not be verified. Please check your Student ID, name, and birthday.');
-        return;
-      }
-
       // Create Supabase Auth account and save all metadata
       const { error: signUpError } = await signUp(
         form.email.trim(),
         form.password,
         {
-          student_id: form.studentId.trim(),
           full_name: form.fullName.trim(),
-          birthdate: form.birthdate,
-          role: 'student'
+          subject_code: form.subjectCode.trim(),
+          role: 'teacher'
         }
       );
 
@@ -84,7 +69,6 @@ export default function Register() {
       }
 
       // Success! Navigate to verification page
-      // Profile auto-creation will happen in AuthContext when they log in for the first time
       navigate('/verify-email', { state: { email: form.email.trim() } });
 
     } catch (err) {
@@ -103,10 +87,10 @@ export default function Register() {
 
   return (
     <AuthLayout>
-      <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Create Your Account</h1>
-      <p className="mt-1 text-sm text-slate-500">Register as a ByteBridge student</p>
+      <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Create Teacher Account</h1>
+      <p className="mt-1 text-sm text-slate-500">Register your teacher account</p>
       <p className="mt-1.5 text-xs text-slate-400 leading-relaxed">
-        Your details are checked against the official student roster.
+        Create your account to start managing courses and activities on ByteBridge.
       </p>
 
       {error && (
@@ -117,19 +101,10 @@ export default function Register() {
       )}
 
       <form className="mt-6" onSubmit={handleSubmit}>
-        {/* Student Information */}
+        {/* Teacher Information */}
         <div className="pb-5 border-b border-slate-100">
-          {sectionLabel('Student Information')}
+          {sectionLabel('Teacher Information')}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
-            <AuthInput
-              label="Student ID"
-              name="studentId"
-              required
-              placeholder="e.g. 2024-0001"
-              value={form.studentId}
-              onChange={handleChange}
-              disabled={loading}
-            />
             <AuthInput
               label="Full Name"
               name="fullName"
@@ -140,12 +115,11 @@ export default function Register() {
               disabled={loading}
             />
             <AuthInput
-              label="Birthday"
-              name="birthdate"
-              type="date"
+              label="Subject Code"
+              name="subjectCode"
               required
-              className="sm:col-span-2"
-              value={form.birthdate}
+              placeholder="e.g. ICT 101"
+              value={form.subjectCode}
               onChange={handleChange}
               disabled={loading}
             />
@@ -161,7 +135,7 @@ export default function Register() {
               name="email"
               type="email"
               required
-              placeholder="student@email.com"
+              placeholder="teacher@email.com"
               className="sm:col-span-2"
               value={form.email}
               onChange={handleChange}
@@ -194,7 +168,7 @@ export default function Register() {
 
         <div className="mt-6">
           <AuthButton loading={loading} loadingText="Creating Account...">
-            Create Account
+            Create Teacher Account
           </AuthButton>
         </div>
 
