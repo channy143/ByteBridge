@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Navigate, Link } from 'react-router-dom';
+import { useNavigate, Navigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { AlertCircle } from 'lucide-react';
 import AuthLayout from '../components/auth/AuthLayout';
@@ -20,6 +20,9 @@ export default function RegisterTeacher() {
 
   const { user, signUp } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from || '/dashboard';
+  const role = location.state?.role || 'teacher';
 
   // Already logged in
   if (user) {
@@ -68,9 +71,9 @@ export default function RegisterTeacher() {
         throw new Error(signUpError.message || 'Failed to create account. Please try again.');
       }
 
-      // Success — account created, straight to the dashboard.
+      // Success — account created, straight to where they were headed.
       // Confirmations are disabled, so no email step is needed.
-      navigate('/dashboard');
+      navigate(from);
 
     } catch (err) {
       setError(err.message);
@@ -175,7 +178,7 @@ export default function RegisterTeacher() {
 
         <p className="mt-5 text-center text-sm text-slate-500">
           Already have an account?{' '}
-          <Link to="/login" className="font-semibold text-primary-900 hover:text-primary-700 transition-colors">
+          <Link to="/login" state={{ from, role }} className="font-semibold text-primary-900 hover:text-primary-700 transition-colors">
             Sign In
           </Link>
         </p>

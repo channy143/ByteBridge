@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, Navigate, Link } from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate, Navigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { GraduationCap, User } from 'lucide-react';
 import AuthLayout from '../components/auth/AuthLayout';
@@ -7,33 +7,29 @@ import AuthInput from '../components/auth/AuthInput';
 import AuthButton from '../components/auth/AuthButton';
 
 export default function Login() {
-  const [role, setRole] = useState('student');
-  const [studentForm, setStudentForm] = useState({ email: '', password: '' });
+  const { signInAsTeacher, signInAsStudent, user, profile, loading } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from || '/dashboard';
+  const navigatedRole = location.state?.role;
+
+  const [role, setRole] = useState(() => {
+    if (navigatedRole) {
+      localStorage.setItem('bytebridge_role', navigatedRole);
+      return navigatedRole;
+    }
+    return localStorage.getItem('bytebridge_role') || 'student';
+  });
+  const [studentForm, setStudentForm] = useState({ studentId: '', birthdate: '' });
   const [teacherForm, setTeacherForm] = useState({ fullName: '', subjectCode: '' });
-  const [remember, setRemember] = useState(false);
-  const [showForgot, setShowForgot] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotSent, setForgotSent] = useState('');
   const [error, setError] = useState('');
   const [loadingLocal, setLoadingLocal] = useState(false);
 
-  const { signIn, signInAsTeacher, resetPassword, user, profile, loading } = useAuth();
-  const navigate = useNavigate();
-
-  // Prefill remembered email
-  useEffect(() => {
-    const saved = localStorage.getItem('bytebridge_email');
-    if (saved) {
-      setStudentForm(f => ({ ...f, email: saved }));
-      setRemember(true);
-    }
-  }, []);
-
   // Wait for auth to finish loading before redirecting automatically
   if (!loading) {
-    // Already logged in with a profile → go to dashboard
+    // Already logged in with a profile → go where they came from (or the dashboard)
     if (user && profile) {
-      return <Navigate to="/dashboard" replace />;
+      return <Navigate to={from} replace />;
     }
   }
 
@@ -43,28 +39,14 @@ export default function Login() {
     setLoadingLocal(true);
 
     try {
-      const { error: signInError } = await signIn(
-        studentForm.email,
-        studentForm.password
+      const { error: signInError } = await signInAsStudent(
+        studentForm.studentId,
+        studentForm.birthdate
       );
       if (signInError) throw signInError;
-
-      // Persist the remembered email
-      if (remember) {
-        localStorage.setItem('bytebridge_email', studentForm.email.trim());
-      } else {
-        localStorage.removeItem('bytebridge_email');
-      }
-
-      navigate('/dashboard');
+      navigate(from);
     } catch (err) {
-      if (err.message?.includes('Invalid login credentials')) {
-        setError('Invalid email or password. Please try again.');
-      } else if (err.message?.includes('Email not confirmed')) {
-        setError('Email confirmation is disabled. Please log in again.');
-      } else {
-        setError(err.message || 'Login failed. Please try again.');
-      }
+      setError(err.message || 'Login failed. Please check your Student ID and birthday.');
     } finally {
       setLoadingLocal(false);
     }
@@ -81,7 +63,7 @@ export default function Login() {
         teacherForm.subjectCode
       );
       if (signInError) throw signInError;
-      navigate('/dashboard');
+      navigate(from);
     } catch (err) {
       setError('Invalid teacher credentials. Please check your name and subject code.');
     } finally {
@@ -89,83 +71,16 @@ export default function Login() {
     }
   };
 
-  const handleForgot = async (e) => {
-    e.preventDefault();
-    setError('');
-    setForgotSent('');
-    setLoadingLocal(true);
-
-    const email = forgotEmail.trim() || studentForm.email.trim();
-    if (!email) {
-      setError('Please enter your email address.');
-      setLoadingLocal(false);
-      return;
-    }
-
-    try {
-      const { error: forgotError } = await resetPassword(email);
-      if (forgotError) throw forgotError;
-      setForgotSent('Reset link sent! Please check your inbox.');
-    } catch (err) {
-      setError(err.message || 'Failed to send the reset link. Please try again.');
-    } finally {
-      setLoadingLocal(false);
-    }
-  };
-
   const switchRole = (nextRole) => {
     setRole(nextRole);
+    localStorage.setItem('bytebridge_role', nextRole);
     setError('');
-    setShowForgot(false);
-    setForgotSent('');
   };
 
   return (
     <AuthLayout>
-      {showForgot ? (
-        <div>
-          <h1 className="text-[28px] font-bold text-slate-900 tracking-tight">Reset your password</h1>
-          <p className="mt-2 text-sm text-slate-500">
-            Enter your email address and we'll send you a link to reset your password.
-          </p>
-
-          <form className="mt-8 space-y-5" onSubmit={handleForgot}>
-            <AuthInput
-              label="Email Address"
-              type="email"
-              required
-              placeholder="student@email.com"
-              value={forgotEmail}
-              onChange={(e) => setForgotEmail(e.target.value)}
-            />
-
-            {forgotSent && (
-              <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-4 py-3">
-                {forgotSent}
-              </p>
-            )}
-            {error && (
-              <p className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-4 py-3">
-                {error}
-              </p>
-            )}
-
-            <AuthButton loading={loadingLocal} loadingText="Sending...">
-              Send Reset Link
-            </AuthButton>
-
-            <button
-              type="button"
-              onClick={() => { setShowForgot(false); setError(''); setForgotSent(''); }}
-              className="w-full text-center text-sm font-medium text-slate-500 hover:text-primary-900 transition-colors"
-            >
-              Back to Sign In
-            </button>
-          </form>
-        </div>
-      ) : (
-        <>
-          {/* Role selector */}
+      <>
+        {/* Role selector */}
           <div className="mb-8 grid grid-cols-2 gap-1.5 p-1.5 bg-slate-100 rounded-xl">
             <button
               type="button"
@@ -207,42 +122,21 @@ export default function Login() {
           {role === 'student' ? (
             <form className="mt-8 space-y-5" onSubmit={handleStudentSubmit}>
               <AuthInput
-                label="Email Address"
-                type="email"
+                label="Student ID"
+                type="text"
                 required
-                placeholder="student@email.com"
-                value={studentForm.email}
-                onChange={(e) => setStudentForm({ ...studentForm, email: e.target.value })}
+                placeholder="e.g. 2024-0001"
+                value={studentForm.studentId}
+                onChange={(e) => setStudentForm({ ...studentForm, studentId: e.target.value })}
               />
 
-              <div>
-                <AuthInput
-                  label="Password"
-                  type="password"
-                  required
-                  placeholder="Enter your password"
-                  value={studentForm.password}
-                  onChange={(e) => setStudentForm({ ...studentForm, password: e.target.value })}
-                />
-                <div className="mt-3 flex items-center justify-between">
-                  <label className="flex items-center text-sm text-slate-600 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={remember}
-                      onChange={(e) => setRemember(e.target.checked)}
-                      className="rounded border-slate-300 text-primary-600 focus:ring-primary-500 w-4 h-4"
-                    />
-                    <span className="ml-2">Remember me</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => { setShowForgot(true); setError(''); }}
-                    className="text-sm font-medium text-primary-700 hover:text-primary-900 transition-colors"
-                  >
-                    Forgot Password?
-                  </button>
-                </div>
-              </div>
+              <AuthInput
+                label="Birthday"
+                type="date"
+                required
+                value={studentForm.birthdate}
+                onChange={(e) => setStudentForm({ ...studentForm, birthdate: e.target.value })}
+              />
 
               <AuthButton loading={loadingLocal} loadingText="Signing In...">
                 Sign In
@@ -278,21 +172,20 @@ export default function Login() {
             {role === 'student' ? (
               <>
                 Don't have an account?{' '}
-                <Link to="/register" className="font-semibold text-primary-900 hover:text-primary-700 transition-colors">
+                <Link to="/register" state={{ from, role }} className="font-semibold text-primary-900 hover:text-primary-700 transition-colors">
                   Create one
                 </Link>
               </>
             ) : (
               <>
                 Don't have an account?{' '}
-                <Link to="/register-teacher" className="font-semibold text-primary-900 hover:text-primary-700 transition-colors">
+                <Link to="/register-teacher" state={{ from, role }} className="font-semibold text-primary-900 hover:text-primary-700 transition-colors">
                   Create one
                 </Link>
               </>
             )}
           </p>
-        </>
-      )}
+      </>
     </AuthLayout>
   );
 }

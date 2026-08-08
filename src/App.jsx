@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import RegisterTeacher from './pages/RegisterTeacher';
@@ -11,6 +11,11 @@ import Materials from './pages/Materials';
 import Notifications from './pages/Notifications';
 import Classroom from './pages/Classroom';
 import ProtectedRoute from './components/layout/ProtectedRoute';
+
+function HomeRedirect() {
+  const { user } = useAuth();
+  return <Navigate to={user ? '/dashboard' : '/login'} replace />;
+}
 
 function App() {
   return (
@@ -76,7 +81,8 @@ function App() {
               </ProtectedRoute>
             } 
           />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<HomeRedirect />} />
+          <Route path="*" element={<HomeRedirect />} />
         </Routes>
       </Router>
     </AuthProvider>

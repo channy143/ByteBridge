@@ -142,6 +142,21 @@ export function AuthProvider({ children }) {
     return await signIn(email, password);
   };
 
+  // Student sign in via student ID + birthday
+  const signInAsStudent = async (studentId, birthdate) => {
+    // 1. RPC verifies identity, resets password to birthdate, returns the auth email
+    const { data, error: rpcError } = await supabase.rpc('login_student', {
+      p_student_id: studentId.trim(),
+      p_birthdate: birthdate,
+    });
+
+    if (rpcError) throw rpcError;
+    if (!data?.success) throw new Error(data?.error || 'Login failed.');
+
+    // 2. Sign in with the email + birthdate as password
+    return await signIn(data.email, birthdate);
+  };
+
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     setProfile(null);
@@ -158,6 +173,7 @@ export function AuthProvider({ children }) {
       signUp,
       signOut,
       signInAsTeacher,
+      signInAsStudent,
       resetPassword,
     }}>
       {!loading && children}

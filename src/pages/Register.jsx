@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Navigate, Link } from 'react-router-dom';
+import { useNavigate, Navigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { AlertCircle } from 'lucide-react';
 import AuthLayout from '../components/auth/AuthLayout';
@@ -12,8 +12,6 @@ export default function Register() {
     fullName: '',
     birthdate: '',
     email: '',
-    password: '',
-    confirmPassword: '',
   });
   const [errors, setErrors] = useState({});
   const [error, setError] = useState('');
@@ -21,6 +19,9 @@ export default function Register() {
 
   const { user, signUp } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from || '/dashboard';
+  const role = location.state?.role || 'student';
 
   // Already logged in
   if (user) {
@@ -38,27 +39,20 @@ export default function Register() {
     setError('');
     setErrors({});
 
-    // Frontend validations
-    if (form.password !== form.confirmPassword) {
-      setErrors({ confirmPassword: 'Passwords do not match.' });
-      return;
-    }
-    if (form.password.length < 6) {
-      setErrors({ password: 'Password must be at least 6 characters long.' });
+    if (!form.birthdate) {
+      setErrors({ birthdate: 'Birthday is required.' });
       return;
     }
 
     setLoading(true);
 
     try {
-      // Open registration: any student can create an account.
-      // The profile + official student record are auto-created on first
-      // login via the register_new_student RPC.
+      // Use birthdate as the password (consistent with student login)
+      const password = form.birthdate;
 
-      // Create Supabase Auth account and save all metadata
       const { error: signUpError } = await signUp(
         form.email.trim(),
-        form.password,
+        password,
         {
           student_id: form.studentId.trim(),
           full_name: form.fullName.trim(),
@@ -74,10 +68,10 @@ export default function Register() {
         throw new Error(signUpError.message || 'Failed to create account. Please try again.');
       }
 
-      // Success — account created, straight to the dashboard.
+      // Success — account created, straight to where they were headed.
       // The profile + official student record are auto-created in AuthContext
       // on session. Confirmations are disabled, so no email step is needed.
-      navigate('/dashboard');
+      navigate(from);
 
     } catch (err) {
       setError(err.message);
@@ -159,29 +153,10 @@ export default function Register() {
               onChange={handleChange}
               disabled={loading}
             />
-            <AuthInput
-              label="Password"
-              name="password"
-              type="password"
-              required
-              placeholder="Create a password"
-              value={form.password}
-              onChange={handleChange}
-              disabled={loading}
-              error={errors.password}
-            />
-            <AuthInput
-              label="Confirm Password"
-              name="confirmPassword"
-              type="password"
-              required
-              placeholder="Re-enter your password"
-              value={form.confirmPassword}
-              onChange={handleChange}
-              disabled={loading}
-              error={errors.confirmPassword}
-            />
           </div>
+          <p className="mt-3 text-xs text-slate-400">
+            Your birthday will be used as your password. You'll sign in with your Student ID and birthday.
+          </p>
         </div>
 
         <div className="mt-6">
@@ -192,7 +167,7 @@ export default function Register() {
 
         <p className="mt-5 text-center text-sm text-slate-500">
           Already have an account?{' '}
-          <Link to="/login" className="font-semibold text-primary-900 hover:text-primary-700 transition-colors">
+          <Link to="/login" state={{ from, role }} className="font-semibold text-primary-900 hover:text-primary-700 transition-colors">
             Sign In
           </Link>
         </p>

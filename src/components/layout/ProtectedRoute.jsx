@@ -1,9 +1,10 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 export default function ProtectedRoute({ children, allowedRoles }) {
   const { user, profile, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -13,14 +14,14 @@ export default function ProtectedRoute({ children, allowedRoles }) {
     );
   }
 
-  // Not logged in → go to login
+  // Not logged in → go to login (remember where they were headed)
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
   // Email confirmed but no profile → something went wrong
   if (!profile) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
   // Role check
