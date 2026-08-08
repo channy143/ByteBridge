@@ -17,7 +17,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loadingLocal, setLoadingLocal] = useState(false);
 
-  const { signIn, signInAsTeacher, resetPassword, user, emailConfirmed, profile, loading } = useAuth();
+  const { signIn, signInAsTeacher, resetPassword, user, profile, loading } = useAuth();
   const navigate = useNavigate();
 
   // Prefill remembered email
@@ -31,14 +31,9 @@ export default function Login() {
 
   // Wait for auth to finish loading before redirecting automatically
   if (!loading) {
-    // Already logged in, verified, and has a profile → go to dashboard
-    if (user && emailConfirmed && profile) {
+    // Already logged in with a profile → go to dashboard
+    if (user && profile) {
       return <Navigate to="/dashboard" replace />;
-    }
-
-    // Logged in but not verified → go to verify
-    if (user && !emailConfirmed) {
-      return <Navigate to="/verify-email" replace />;
     }
   }
 
@@ -48,7 +43,7 @@ export default function Login() {
     setLoadingLocal(true);
 
     try {
-      const { data, error: signInError } = await signIn(
+      const { error: signInError } = await signIn(
         studentForm.email,
         studentForm.password
       );
@@ -61,18 +56,12 @@ export default function Login() {
         localStorage.removeItem('bytebridge_email');
       }
 
-      // Check if email is confirmed
-      if (!data?.user?.email_confirmed_at) {
-        navigate('/verify-email');
-        return;
-      }
-
       navigate('/dashboard');
     } catch (err) {
       if (err.message?.includes('Invalid login credentials')) {
         setError('Invalid email or password. Please try again.');
       } else if (err.message?.includes('Email not confirmed')) {
-        navigate('/verify-email');
+        setError('Email confirmation is disabled. Please log in again.');
       } else {
         setError(err.message || 'Login failed. Please try again.');
       }

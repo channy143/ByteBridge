@@ -19,11 +19,11 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { user, emailConfirmed, signUp } = useAuth();
+  const { user, signUp } = useAuth();
   const navigate = useNavigate();
 
-  // Already logged in and verified
-  if (user && emailConfirmed) {
+  // Already logged in
+  if (user) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -74,9 +74,10 @@ export default function Register() {
         throw new Error(signUpError.message || 'Failed to create account. Please try again.');
       }
 
-      // Success! Navigate to verification page
-      // Profile auto-creation will happen in AuthContext when they log in for the first time
-      navigate('/verify-email', { state: { email: form.email.trim() } });
+      // Success — account created, straight to the dashboard.
+      // The profile + official student record are auto-created in AuthContext
+      // on session. Confirmations are disabled, so no email step is needed.
+      navigate('/dashboard');
 
     } catch (err) {
       setError(err.message);

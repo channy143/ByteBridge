@@ -3,7 +3,6 @@ import { AuthProvider } from './contexts/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import RegisterTeacher from './pages/RegisterTeacher';
-import VerifyEmail from './pages/VerifyEmail';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import Announcements from './pages/Announcements';
@@ -21,7 +20,6 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/register-teacher" element={<RegisterTeacher />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route 
             path="/dashboard" 
             element={

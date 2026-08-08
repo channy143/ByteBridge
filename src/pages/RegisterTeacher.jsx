@@ -18,11 +18,11 @@ export default function RegisterTeacher() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { user, emailConfirmed, signUp } = useAuth();
+  const { user, signUp } = useAuth();
   const navigate = useNavigate();
 
-  // Already logged in and verified
-  if (user && emailConfirmed) {
+  // Already logged in
+  if (user) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -68,8 +68,9 @@ export default function RegisterTeacher() {
         throw new Error(signUpError.message || 'Failed to create account. Please try again.');
       }
 
-      // Success! Navigate to verification page
-      navigate('/verify-email', { state: { email: form.email.trim() } });
+      // Success — account created, straight to the dashboard.
+      // Confirmations are disabled, so no email step is needed.
+      navigate('/dashboard');
 
     } catch (err) {
       setError(err.message);

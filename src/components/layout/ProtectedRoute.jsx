@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 export default function ProtectedRoute({ children, allowedRoles }) {
-  const { user, profile, loading, emailConfirmed } = useAuth();
+  const { user, profile, loading } = useAuth();
 
   if (loading) {
     return (
@@ -16,11 +16,6 @@ export default function ProtectedRoute({ children, allowedRoles }) {
   // Not logged in → go to login
   if (!user) {
     return <Navigate to="/login" replace />;
-  }
-
-  // Logged in but email not confirmed → go to verify-email
-  if (!emailConfirmed) {
-    return <Navigate to="/verify-email" replace />;
   }
 
   // Email confirmed but no profile → something went wrong

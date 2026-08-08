@@ -8,14 +8,14 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Derived state: is email confirmed?
+  // Derived state: email confirmation is disabled, so accounts are created activated.
   const emailConfirmed = !!user?.email_confirmed_at;
 
   useEffect(() => {
     // Check active sessions and sets the user
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user && session.user.email_confirmed_at) {
+      if (session?.user) {
         fetchProfile(session.user.id, session.user);
       } else {
         setLoading(false);
@@ -26,7 +26,7 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      if (currentUser && currentUser.email_confirmed_at) {
+      if (currentUser) {
         fetchProfile(currentUser.id, currentUser);
       } else {
         setProfile(null);
@@ -126,15 +126,6 @@ export function AuthProvider({ children }) {
     return { data, error };
   };
 
-  // Resend verification email
-  const resendVerificationEmail = async (email) => {
-    const { data, error } = await supabase.auth.resend({
-      type: 'signup',
-      email,
-    });
-    return { data, error };
-  };
-
   // Send a password reset link
   const resetPassword = async (email) => {
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -167,7 +158,6 @@ export function AuthProvider({ children }) {
       signUp,
       signOut,
       signInAsTeacher,
-      resendVerificationEmail,
       resetPassword,
     }}>
       {!loading && children}
