@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Layout, ArrowLeft } from 'lucide-react';
 
-export default function AuthLayout({ children, showBack = true }) {
+export default function AuthLayout({ children, showBack = false }) {
   const navigate = useNavigate();
 
   return (
@@ -67,10 +67,6 @@ export default function AuthLayout({ children, showBack = true }) {
             )}
             {children}
           </div>
-        </div>
-
-        <div className="px-6 pb-6 text-center text-xs text-slate-400">
-          ByteBridge · Educational Portal for BTLED ICT Majors
         </div>
       </div>
     </div>
