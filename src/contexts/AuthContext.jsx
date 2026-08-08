@@ -151,16 +151,6 @@ export function AuthProvider({ children }) {
     return await signIn(email, password);
   };
 
-  // Check a student's ID + name + birthdate against the official roster (RPC)
-  const verifyStudentIdentity = async (studentId, fullName, birthdate) => {
-    const { data, error } = await supabase.rpc('verify_student_identity', {
-      p_student_id: studentId,
-      p_full_name: fullName,
-      p_birthdate: birthdate,
-    });
-    return { data, error };
-  };
-
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     setProfile(null);
@@ -177,7 +167,6 @@ export function AuthProvider({ children }) {
       signUp,
       signOut,
       signInAsTeacher,
-      verifyStudentIdentity,
       resendVerificationEmail,
       resetPassword,
     }}>

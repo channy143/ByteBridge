@@ -19,7 +19,7 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { user, emailConfirmed, signUp, verifyStudentIdentity } = useAuth();
+  const { user, emailConfirmed, signUp } = useAuth();
   const navigate = useNavigate();
 
   // Already logged in and verified
@@ -51,18 +51,9 @@ export default function Register() {
     setLoading(true);
 
     try {
-      // Gatekeeper: verify the student against the official roster before signup
-      const { data: verifiedData, error: verifyError } = await verifyStudentIdentity(
-        form.studentId.trim(),
-        form.fullName.trim(),
-        form.birthdate
-      );
-
-      if (verifyError) throw verifyError;
-      if (!verifiedData?.verified) {
-        setError(verifiedData?.reason || 'Your identity could not be verified. Please check your Student ID, name, and birthday.');
-        return;
-      }
+      // Open registration: any student can create an account.
+      // The profile + official student record are auto-created on first
+      // login via the register_new_student RPC.
 
       // Create Supabase Auth account and save all metadata
       const { error: signUpError } = await signUp(
@@ -106,7 +97,7 @@ export default function Register() {
       <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Create Your Account</h1>
       <p className="mt-1 text-sm text-slate-500">Register as a ByteBridge student</p>
       <p className="mt-1.5 text-xs text-slate-400 leading-relaxed">
-        Your details are checked against the official student roster.
+        Create an account to start learning and collaborating on ByteBridge.
       </p>
 
       {error && (
