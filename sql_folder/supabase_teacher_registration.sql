@@ -36,17 +36,20 @@ BEGIN
   -- 2. Generate a stable teacher identifier
   v_teacher_id := 'T-' || upper(substr(md5(p_auth_id::text), 1, 6));
 
-  -- 3. Insert into teachers table (id = auth uid, mirrors students)
+  -- 3. Insert into profiles table FIRST (teachers.id has an FK to profiles.id)
+  INSERT INTO public.profiles (id, auth_user_id, role, full_name, email)
+  VALUES (p_auth_id, p_auth_id, 'teacher', p_full_name, p_email)
+  ON CONFLICT (id) DO UPDATE
+  SET email = EXCLUDED.email,
+      role = EXCLUDED.role,
+      full_name = EXCLUDED.full_name;
+
+  -- 4. Insert into teachers table (id = auth uid, mirrors students)
   INSERT INTO public.teachers (id, teacher_id, full_name)
   VALUES (p_auth_id, v_teacher_id, p_full_name)
   ON CONFLICT (teacher_id) DO UPDATE
   SET id = EXCLUDED.id,
       full_name = EXCLUDED.full_name;
-
-  -- 4. Insert into profiles table
-  INSERT INTO public.profiles (id, auth_user_id, role, full_name, email)
-  VALUES (p_auth_id, p_auth_id, 'teacher', p_full_name, p_email)
-  ON CONFLICT (id) DO NOTHING;
 
   -- 5. Assign the subject to the teacher (if not already assigned)
   IF NOT EXISTS (

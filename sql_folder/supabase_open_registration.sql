@@ -23,7 +23,18 @@ DECLARE
   v_new_student_uuid UUID;
   v_new_profile_id UUID;
 BEGIN
-  -- 1. Insert into students table (if not exists), using the auth uid as id
+  -- 1. Insert into profiles table FIRST (students.id has an FK to profiles.id)
+  INSERT INTO public.profiles (id, auth_user_id, student_id, role, full_name, email)
+  VALUES (p_auth_id, p_auth_id, p_student_id, 'student', p_full_name, p_email)
+  ON CONFLICT (id) DO UPDATE
+  SET auth_user_id = EXCLUDED.auth_user_id,
+      student_id = EXCLUDED.student_id,
+      role = EXCLUDED.role,
+      full_name = EXCLUDED.full_name,
+      email = EXCLUDED.email
+  RETURNING id INTO v_new_profile_id;
+
+  -- 2. Insert into students table (if not exists), using the auth uid as id
   --    so students.id == profiles.id == auth uid. This keeps every FK that
   --    points at students(id) (enrollments, submissions, module_progress)
   --    aligned with the frontend, which always uses profile.id.
@@ -34,12 +45,6 @@ BEGIN
       full_name = EXCLUDED.full_name,
       birthdate = EXCLUDED.birthdate
   RETURNING id INTO v_new_student_uuid;
-
-  -- 2. Insert into profiles table
-  INSERT INTO public.profiles (id, auth_user_id, student_id, role, full_name, email)
-  VALUES (p_auth_id, p_auth_id, p_student_id, 'student', p_full_name, p_email)
-  ON CONFLICT (id) DO NOTHING
-  RETURNING id INTO v_new_profile_id;
 
   -- Return success
   RETURN jsonb_build_object(

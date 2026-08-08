@@ -11,8 +11,6 @@ export default function RegisterTeacher() {
     fullName: '',
     subjectCode: '',
     email: '',
-    password: '',
-    confirmPassword: '',
   });
   const [errors, setErrors] = useState({});
   const [error, setError] = useState('');
@@ -40,23 +38,21 @@ export default function RegisterTeacher() {
     setError('');
     setErrors({});
 
-    // Frontend validations
-    if (form.password !== form.confirmPassword) {
-      setErrors({ confirmPassword: 'Passwords do not match.' });
-      return;
-    }
-    if (form.password.length < 6) {
-      setErrors({ password: 'Password must be at least 6 characters long.' });
+    if (!form.subjectCode) {
+      setErrors({ subjectCode: 'Subject code is required.' });
       return;
     }
 
     setLoading(true);
 
     try {
+      // Use the subject code (lowercase, no spaces) as the password, consistent with teacher login
+      const password = form.subjectCode.trim().toLowerCase().replace(/\s+/g, '');
+
       // Create Supabase Auth account and save all metadata
       const { error: signUpError } = await signUp(
         form.email.trim(),
-        form.password,
+        password,
         {
           full_name: form.fullName.trim(),
           subject_code: form.subjectCode.trim(),
@@ -145,29 +141,10 @@ export default function RegisterTeacher() {
               onChange={handleChange}
               disabled={loading}
             />
-            <AuthInput
-              label="Password"
-              name="password"
-              type="password"
-              required
-              placeholder="Create a password"
-              value={form.password}
-              onChange={handleChange}
-              disabled={loading}
-              error={errors.password}
-            />
-            <AuthInput
-              label="Confirm Password"
-              name="confirmPassword"
-              type="password"
-              required
-              placeholder="Re-enter your password"
-              value={form.confirmPassword}
-              onChange={handleChange}
-              disabled={loading}
-              error={errors.confirmPassword}
-            />
           </div>
+          <p className="mt-3 text-xs text-slate-400">
+            You'll sign in using your Full Name and Subject Code (lowercase, no spaces) as the password — e.g. &quot;ICT 101&quot; becomes &quot;ict101&quot;.
+          </p>
         </div>
 
         <div className="mt-6">

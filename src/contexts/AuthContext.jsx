@@ -134,12 +134,20 @@ export function AuthProvider({ children }) {
     return { data, error };
   };
 
-  // Teacher sign in (keeping existing synthetic email approach)
+  // Teacher sign in via full name + subject code
   const signInAsTeacher = async (name, subjectCode) => {
-    const cleanName = name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-    const email = `${cleanName}@teacher.bytebridge.local`;
+    // 1. RPC verifies identity, resets password to the subject code, returns the auth email
+    const { data, error: rpcError } = await supabase.rpc('login_teacher', {
+      p_full_name: name,
+      p_subject_code: subjectCode,
+    });
+
+    if (rpcError) throw rpcError;
+    if (!data?.success) throw new Error(data?.error || 'Login failed.');
+
+    // 2. Sign in with the email + subject code (lowercase, no spaces) as password
     const password = subjectCode.trim().toLowerCase().replace(/\s+/g, '');
-    return await signIn(email, password);
+    return await signIn(data.email, password);
   };
 
   // Student sign in via student ID + birthday
