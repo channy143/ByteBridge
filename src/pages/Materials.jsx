@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 import PageHeader from '../components/ui/PageHeader';
@@ -22,7 +23,11 @@ import {
   Loader2,
   FolderOpen,
   User,
+  Search,
+  Presentation,
+  Code as CodeIcon,
 } from 'lucide-react';
+import { timeAgo } from '../lib/status';
 
 const CARD_GRADS = [
   'from-primary-500 to-primary-700',
@@ -48,8 +53,26 @@ const hashColor = (str, len) => {
   return h % len;
 };
 
+const TABS = ['overview', 'modules', 'resources'];
+
+const getTypeIcon = (type) => {
+  switch (type) {
+    case 'Video': return <Video className="w-4 h-4 text-red-500" />;
+    case 'Link': return <LinkIcon className="w-4 h-4 text-blue-500" />;
+    case 'Code': return <CodeIcon className="w-4 h-4 text-purple-500" />;
+    case 'Presentation': return <Presentation className="w-4 h-4 text-sky-500" />;
+    case 'PDF':
+    case 'Document':
+    default: return <FileText className="w-4 h-4 text-amber-500" />;
+  }
+};
+
+const shortDate = (iso) =>
+  new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
 export default function Materials() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [subjects, setSubjects] = useState([]);
   const [modules, setModules] = useState([]);
   const [teacherAssignments, setTeacherAssignments] = useState({});
@@ -61,11 +84,64 @@ export default function Materials() {
   const [showAddMaterial, setShowAddMaterial] = useState(null);
   const [newMaterial, setNewMaterial] = useState({ title: '', external_url: '', material_type: 'PDF' });
 
+  const [tab, setTab] = useState('overview');
+  const [matProgress, setMatProgress] = useState(new Set());
+  const [liveSession, setLiveSession] = useState(null);
+  const [recentUpdates, setRecentUpdates] = useState([]);
+  const [resourceSearch, setResourceSearch] = useState('');
+  const [resourceType, setResourceType] = useState('all');
+
   const isTeacher = profile?.role === 'teacher';
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    setTab('overview');
+    setExpandedModules({});
+    setResourceSearch('');
+    setResourceType('all');
+    setMatProgress(new Set());
+    setLiveSession(null);
+    setRecentUpdates([]);
+
+    if (!isTeacher && profile?.id) {
+      supabase
+        .from('course_material_progress')
+        .select('material_id')
+        .eq('student_id', profile.id)
+        .then(({ data, error }) => {
+          if (!error && data) setMatProgress(new Set(data.map((r) => r.material_id)));
+        })
+        .catch(() => {});
+    }
+
+    supabase
+      .from('meeting_sessions')
+      .select('*, teachers (full_name)')
+      .eq('subject_id', selectedId)
+      .is('ended_at', null)
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .then(({ data, error }) => {
+        if (!error && data?.length) setLiveSession(data[0]);
+      })
+      .catch(() => {});
+
+    supabase
+      .from('announcements')
+      .select('id, title, created_at')
+      .eq('subject_id', selectedId)
+      .order('created_at', { ascending: false })
+      .limit(3)
+      .then(({ data, error }) => {
+        if (!error) setRecentUpdates(data || []);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   const fetchData = async () => {
     try {
@@ -97,9 +173,6 @@ export default function Materials() {
       );
       setSubjects(subjRes.data || []);
       setModules(modRes.data || []);
-      if (modRes.data?.length > 0) {
-        setExpandedModules({ [modRes.data[0].id]: true });
-      }
     } catch (err) {
       console.error('Error fetching modules:', err);
     } finally {
@@ -128,6 +201,19 @@ export default function Materials() {
   const isModuleCompleted = (mod) =>
     mod.module_progress?.some((p) => p.student_id === profile?.id && p.completed);
 
+  const moduleItemsDone = (mod) =>
+    (mod.course_materials || []).filter((mat) => matProgress.has(mat.id)).length;
+
+  const itemsLine = (mod) => {
+    const mats = mod.course_materials || [];
+    const videos = mats.filter((m) => m.material_type === 'Video').length;
+    const links = mats.filter((m) => m.material_type === 'Link').length;
+    let line = `${mats.length} item${mats.length === 1 ? '' : 's'}`;
+    if (videos) line += ` · ${videos} video${videos === 1 ? '' : 's'}`;
+    if (links) line += ` · ${links} link${links === 1 ? '' : 's'}`;
+    return line;
+  };
+
   const toggleModule = (id) => setExpandedModules((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const handleMarkComplete = async (moduleId) => {
@@ -142,6 +228,35 @@ export default function Materials() {
       fetchData();
     } catch (err) {
       console.error('Error marking module complete:', err);
+    }
+  };
+
+  const toggleMaterial = async (mat) => {
+    if (!profile) return;
+    const done = matProgress.has(mat.id);
+    setMatProgress((prev) => {
+      const next = new Set(prev);
+      if (done) next.delete(mat.id);
+      else next.add(mat.id);
+      return next;
+    });
+    if (done) {
+      supabase
+        .from('course_material_progress')
+        .delete()
+        .eq('student_id', profile.id)
+        .eq('material_id', mat.id)
+        .catch(() => {});
+    } else {
+      supabase
+        .from('course_material_progress')
+        .upsert({
+          student_id: profile.id,
+          material_id: mat.id,
+          completed: true,
+          completed_at: new Date().toISOString(),
+        }, { onConflict: 'student_id,material_id' })
+        .catch(() => {});
     }
   };
 
@@ -181,17 +296,22 @@ export default function Materials() {
     }
   };
 
-  const getTypeIcon = (type) => {
-    switch (type) {
-      case 'Video': return <Video className="w-4 h-4 text-red-500" />;
-      case 'Link': return <LinkIcon className="w-4 h-4 text-blue-500" />;
-      default: return <FileText className="w-4 h-4 text-amber-500" />;
-    }
-  };
-
   const selected = subjects.find((s) => s.id === selectedId);
   const selectedMods = selected ? courseModules(selected.id) : [];
   const selectedProgress = getProgress(selectedMods);
+  const allMaterials = selectedMods.flatMap((m) => m.course_materials || []);
+  const materialsDone = allMaterials.filter((mat) => matProgress.has(mat.id)).length;
+  const modulesDone = selectedMods.filter(isModuleCompleted).length;
+  const nextModule = selectedMods.find((m) => !isModuleCompleted(m));
+  const nextModuleIdx = selectedMods.findIndex((m) => m.id === nextModule?.id);
+  const syllabus = allMaterials.find((m) => (m.title || '').toLowerCase().includes('syllabus'));
+  const resourceUrl = (m) => m.external_url || m.file_url;
+  const resourceTypes = ['all', ...new Set(allMaterials.map((m) => m.material_type).filter(Boolean))];
+  const filteredResources = allMaterials.filter((m) => {
+    if (resourceType !== 'all' && m.material_type !== resourceType) return false;
+    if (resourceSearch && !m.title.toLowerCase().includes(resourceSearch.toLowerCase())) return false;
+    return true;
+  });
 
   return (
     <div>
@@ -296,8 +416,9 @@ export default function Materials() {
             <ChevronLeft className="w-4 h-4" /> All courses
           </button>
 
+          {/* Course header */}
           <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-            <div>
+            <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <h1 className="text-[20px] font-bold text-slate-900 tracking-tight">{selected.subject_title}</h1>
                 <span className="text-[12px] font-semibold text-primary-700 bg-primary-50 px-2 py-0.5 rounded">
@@ -316,8 +437,8 @@ export default function Materials() {
               )}
               {!isTeacher && (
                 <div className="flex items-center gap-2 mt-2.5">
-                  <ProgressBar value={selectedProgress} className="w-40" />
-                  <span className="text-[11.5px] text-slate-400">
+                  <ProgressBar value={selectedProgress} className="w-full" />
+                  <span className="text-[11.5px] text-slate-400 whitespace-nowrap">
                     {selectedProgress}% complete
                   </span>
                 </div>
@@ -330,156 +451,417 @@ export default function Materials() {
             )}
           </div>
 
-          {showAddModule && isTeacher && (
-            <form onSubmit={handleAddModule} className="ws-card p-4 mb-4 space-y-3">
-              <input
-                required
-                value={newModule.title}
-                onChange={(e) => setNewModule({ ...newModule, title: e.target.value })}
-                placeholder="Module title"
-                className="ws-input w-full"
-              />
-              <textarea
-                rows={2}
-                value={newModule.description}
-                onChange={(e) => setNewModule({ ...newModule, description: e.target.value })}
-                placeholder="Description (optional)"
-                className="ws-input w-full resize-none"
-              />
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setShowAddModule(false)} className="ws-btn-secondary">Cancel</button>
-                <button type="submit" className="ws-btn-primary"><Plus className="w-4 h-4" /> Create Module</button>
-              </div>
-            </form>
-          )}
+          {/* Tabs */}
+          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 mb-5 w-fit">
+            {TABS.map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-3.5 py-1.5 rounded-md text-[12.5px] font-medium capitalize transition-colors ${
+                  tab === t ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
 
           {loading ? (
             <div className="ws-card flex items-center justify-center py-16">
               <Loader2 className="h-6 w-6 text-primary-500 animate-spin" />
             </div>
-          ) : courseModules(selected.id).length === 0 ? (
-            <div className="ws-card">
-              <EmptyState
-                icon={<FolderOpen className="w-7 h-7" />}
-                title="No modules yet"
-                description="Course materials will appear here once modules are created."
-                action={isTeacher ? (
-                  <button onClick={() => setShowAddModule(true)} className="ws-btn-primary">
-                    <Plus className="w-4 h-4" /> Add Module
-                  </button>
-                ) : null}
-              />
-            </div>
           ) : (
-            <div className="space-y-3">
-              {courseModules(selected.id).map((mod, idx) => (
-                <div key={mod.id} className="ws-card overflow-hidden">
-                  <button
-                    onClick={() => toggleModule(mod.id)}
-                    className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-50/60 transition-colors"
-                  >
-                    <div className="flex items-center min-w-0">
-                      {!isTeacher &&
-                        (isModuleCompleted(mod) ? (
-                          <CheckCircle className="w-[18px] h-[18px] text-emerald-500 mr-3 flex-shrink-0" />
-                        ) : (
-                          <Circle className="w-[18px] h-[18px] text-slate-300 mr-3 flex-shrink-0" />
-                        ))}
-                      {isTeacher && (
-                        <span className="w-6 h-6 rounded-md bg-primary-50 text-primary-700 flex items-center justify-center text-[11px] font-bold mr-3 flex-shrink-0">
-                          {idx + 1}
-                        </span>
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-[13.5px] font-semibold text-slate-800 truncate">{mod.title}</p>
-                        {mod.description && <p className="text-[11.5px] text-slate-400 truncate">{mod.description}</p>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 ml-3">
-                      <span className="text-[11.5px] text-slate-400 whitespace-nowrap">
-                        {mod.course_materials?.length || 0} items
-                      </span>
-                      {expandedModules[mod.id] ? (
-                        <ChevronDown className="w-4 h-4 text-slate-400" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4 text-slate-400" />
-                      )}
-                    </div>
-                  </button>
-
-                  {expandedModules[mod.id] && (
-                    <div className="px-4 pb-3 border-t border-slate-100">
-                      {mod.course_materials && mod.course_materials.length > 0 ? (
-                        <ul className="divide-y divide-slate-100">
-                          {mod.course_materials.map((mat) => (
-                            <li key={mat.id} className="py-2 flex items-center justify-between gap-3 group">
-                              <div className="flex items-center min-w-0">
-                                {getTypeIcon(mat.material_type)}
-                                <span className="ml-2.5 text-[13px] font-medium text-slate-700 truncate">{mat.title}</span>
-                                <span className="ml-2 text-[10.5px] text-slate-400 bg-slate-100 px-1.5 py-px rounded flex-shrink-0">
-                                  {mat.material_type}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1 flex-shrink-0">
-                                {mat.external_url && (
-                                  <a href={mat.external_url} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded text-primary-600 hover:bg-primary-50" title="Open">
-                                    <ExternalLink className="w-4 h-4" />
-                                  </a>
-                                )}
-                                {mat.file_url && (
-                                  <a href={mat.file_url} download className="p-1.5 rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Download">
-                                    <Download className="w-4 h-4" />
-                                  </a>
-                                )}
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-[12.5px] text-slate-400 py-3 text-center">No materials in this module yet.</p>
-                      )}
-
-                      {isTeacher && (
-                        <div className="mt-2 pt-2.5 border-t border-slate-100">
-                          {showAddMaterial === mod.id ? (
-                            <form onSubmit={(e) => handleAddMaterial(e, mod.id)} className="flex flex-wrap items-center gap-2">
-                              <input required placeholder="Material title" value={newMaterial.title}
-                                onChange={(e) => setNewMaterial({ ...newMaterial, title: e.target.value })}
-                                className="ws-input flex-1 min-w-[160px]" />
-                              <input type="url" placeholder="External URL" value={newMaterial.external_url}
-                                onChange={(e) => setNewMaterial({ ...newMaterial, external_url: e.target.value })}
-                                className="ws-input flex-1 min-w-[160px]" />
-                              <select value={newMaterial.material_type}
-                                onChange={(e) => setNewMaterial({ ...newMaterial, material_type: e.target.value })}
-                                className="ws-input">
-                                <option>PDF</option><option>Video</option><option>Link</option>
-                                <option>Document</option><option>Presentation</option><option>Code</option>
-                              </select>
-                              <button type="button" onClick={() => setShowAddMaterial(null)} className="p-1.5 text-slate-400 hover:text-slate-700">
-                                <X className="w-4 h-4" />
-                              </button>
-                              <button type="submit" className="ws-btn-primary text-[12px] px-2.5 py-1.5">Add</button>
-                            </form>
-                          ) : (
-                            <button onClick={() => setShowAddMaterial(mod.id)} className="flex items-center gap-1 text-[12.5px] font-medium text-primary-600 hover:text-primary-700">
-                              <Plus className="w-3.5 h-3.5" /> Add Material
+            <>
+              {/* ============ OVERVIEW ============ */}
+              {tab === 'overview' && (
+                <div className="space-y-5">
+                  {!isTeacher && (
+                    <>
+                      <div>
+                        <h2 className="ws-section-title mb-2">Continue learning</h2>
+                        {nextModule ? (
+                          <div className="ws-card p-4 flex flex-wrap items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-[13px] font-semibold text-primary-700">
+                                Module {nextModuleIdx + 1} · {nextModule.title}
+                              </p>
+                              <p className="text-[12.5px] text-slate-500 mt-0.5 line-clamp-1">
+                                {nextModule.description || 'Continue working through this module.'}
+                              </p>
+                              <p className="text-[11px] text-slate-400 mt-1">{itemsLine(nextModule)}</p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setTab('modules');
+                                setExpandedModules((prev) => ({ ...prev, [nextModule.id]: true }));
+                              }}
+                              className="ws-btn-primary"
+                            >
+                              Continue
+                              <ChevronRight className="w-3.5 h-3.5" />
                             </button>
+                          </div>
+                        ) : selectedMods.length > 0 ? (
+                          <div className="ws-card px-4 py-3.5 text-[13px] text-slate-500">
+                            You're all caught up — every module is complete.
+                          </div>
+                        ) : (
+                          <div className="ws-card px-4 py-3.5 text-[13px] text-slate-500">
+                            No modules yet — check back soon.
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <h2 className="ws-section-title mb-2">Your progress</h2>
+                        <div className="ws-card p-4 space-y-4">
+                          <div>
+                            <div className="flex justify-between text-[12px] text-slate-500 mb-1.5">
+                              <span className="font-medium">Modules</span>
+                              <span>{modulesDone} / {selectedMods.length} completed</span>
+                            </div>
+                            <ProgressBar value={selectedMods.length ? Math.round((modulesDone / selectedMods.length) * 100) : 0} />
+                          </div>
+                          <div>
+                            <div className="flex justify-between text-[12px] text-slate-500 mb-1.5">
+                              <span className="font-medium">Materials</span>
+                              <span>{materialsDone} / {allMaterials.length} completed</span>
+                            </div>
+                            <ProgressBar value={allMaterials.length ? Math.round((materialsDone / allMaterials.length) * 100) : 0} />
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  <div>
+                    <h2 className="ws-section-title mb-2">Live class</h2>
+                    {liveSession ? (
+                      <div className="ws-card p-4 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <span className="relative flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+                          </span>
+                          <div>
+                            <p className="text-[13px] font-semibold text-slate-800">
+                              {liveSession.teachers?.full_name || 'A teacher'} is teaching now
+                            </p>
+                            <p className="text-[11px] text-slate-400">{selected.subject_code} · {liveSession.room_name}</p>
+                          </div>
+                        </div>
+                        <button onClick={() => navigate('/classroom')} className="ws-btn-primary">
+                          Join classroom
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="ws-card px-4 py-3 text-[12.5px] text-slate-500">No live class right now.</div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h2 className="ws-section-title">Recent updates</h2>
+                      <button
+                        onClick={() => navigate('/announcements')}
+                        className="text-[12px] font-medium text-primary-600 hover:text-primary-700"
+                      >
+                        View all updates →
+                      </button>
+                    </div>
+                    <div className="ws-card divide-y divide-slate-100">
+                      {recentUpdates.length > 0 ? (
+                        recentUpdates.map((u) => (
+                          <button
+                            key={u.id}
+                            onClick={() => navigate('/announcements')}
+                            className="w-full px-4 py-2.5 flex items-center gap-2 text-left hover:bg-slate-50/60 transition-colors"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary-500 shrink-0" />
+                            <span className="text-[13px] font-medium text-slate-700 truncate">{u.title}</span>
+                            <span className="ml-auto text-[11.5px] text-slate-400 whitespace-nowrap">{timeAgo(u.created_at)}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="px-4 py-3 text-[12.5px] text-slate-400">No updates posted yet.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ============ MODULES ============ */}
+              {tab === 'modules' && (
+                <>
+                  {showAddModule && isTeacher && (
+                    <form onSubmit={handleAddModule} className="ws-card p-4 mb-4 space-y-3">
+                      <input
+                        required
+                        value={newModule.title}
+                        onChange={(e) => setNewModule({ ...newModule, title: e.target.value })}
+                        placeholder="Module title"
+                        className="ws-input w-full"
+                      />
+                      <textarea
+                        rows={2}
+                        value={newModule.description}
+                        onChange={(e) => setNewModule({ ...newModule, description: e.target.value })}
+                        placeholder="Description (optional)"
+                        className="ws-input w-full resize-none"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button type="button" onClick={() => setShowAddModule(false)} className="ws-btn-secondary">Cancel</button>
+                        <button type="submit" className="ws-btn-primary"><Plus className="w-4 h-4" /> Create Module</button>
+                      </div>
+                    </form>
+                  )}
+
+                  {selectedMods.length === 0 ? (
+                    <div className="ws-card">
+                      <EmptyState
+                        icon={<FolderOpen className="w-7 h-7" />}
+                        title="No modules yet"
+                        description="Course materials will appear here once modules are created."
+                        action={isTeacher ? (
+                          <button onClick={() => setShowAddModule(true)} className="ws-btn-primary">
+                            <Plus className="w-4 h-4" /> Add Module
+                          </button>
+                        ) : null}
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {selectedMods.map((mod, idx) => (
+                        <div key={mod.id} className="ws-card overflow-hidden">
+                          <button
+                            onClick={() => toggleModule(mod.id)}
+                            className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-50/60 transition-colors"
+                          >
+                            <div className="flex items-center min-w-0">
+                              <span className="w-8 h-8 rounded-md bg-slate-100 text-slate-600 flex items-center justify-center text-[11px] font-bold mr-3 flex-shrink-0">
+                                {String(idx + 1).padStart(2, '0')}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="text-[13.5px] font-semibold text-slate-800 truncate">{mod.title}</p>
+                                {mod.description && <p className="text-[11.5px] text-slate-400 truncate">{mod.description}</p>}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 ml-3">
+                              {!isTeacher ? (
+                                isModuleCompleted(mod) ? (
+                                  <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
+                                    ✓ Complete
+                                  </span>
+                                ) : (
+                                  <span className="text-[11.5px] text-slate-400 whitespace-nowrap">
+                                    {moduleItemsDone(mod)} / {mod.course_materials?.length || 0} completed
+                                  </span>
+                                )
+                              ) : (
+                                <span className="text-[11.5px] text-slate-400 whitespace-nowrap">
+                                  {mod.course_materials?.length || 0} items
+                                </span>
+                              )}
+                              {expandedModules[mod.id] ? (
+                                <ChevronDown className="w-4 h-4 text-slate-400" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-slate-400" />
+                              )}
+                            </div>
+                          </button>
+
+                          {expandedModules[mod.id] && (
+                            <div className="px-4 pb-3 border-t border-slate-100">
+                              {mod.course_materials && mod.course_materials.length > 0 ? (
+                                <ul className="divide-y divide-slate-100">
+                                  {mod.course_materials.map((mat) => (
+                                    <li key={mat.id} className="py-2 flex items-center justify-between gap-3 group">
+                                      <div className="flex items-center min-w-0">
+                                        {!isTeacher && (
+                                          <button
+                                            onClick={() => toggleMaterial(mat)}
+                                            className="mr-2 flex-shrink-0"
+                                            title={matProgress.has(mat.id) ? 'Mark as not completed' : 'Mark as completed'}
+                                          >
+                                            {matProgress.has(mat.id) ? (
+                                              <CheckCircle className="w-[18px] h-[18px] text-emerald-500" />
+                                            ) : (
+                                              <Circle className="w-[18px] h-[18px] text-slate-300 hover:text-slate-400" />
+                                            )}
+                                          </button>
+                                        )}
+                                        {getTypeIcon(mat.material_type)}
+                                        <span className="ml-2.5 text-[13px] font-medium text-slate-700 truncate">{mat.title}</span>
+                                        <span className="ml-2 text-[10.5px] text-slate-400 bg-slate-100 px-1.5 py-px rounded flex-shrink-0">
+                                          {mat.material_type}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-1 flex-shrink-0">
+                                        {mat.external_url && (
+                                          <a href={mat.external_url} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded text-primary-600 hover:bg-primary-50" title="Open">
+                                            <ExternalLink className="w-4 h-4" />
+                                          </a>
+                                        )}
+                                        {mat.file_url && (
+                                          <a href={mat.file_url} download className="p-1.5 rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Download">
+                                            <Download className="w-4 h-4" />
+                                          </a>
+                                        )}
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="text-[12.5px] text-slate-400 py-3 text-center">No materials in this module yet.</p>
+                              )}
+
+                              {isTeacher && (
+                                <div className="mt-2 pt-2.5 border-t border-slate-100">
+                                  {showAddMaterial === mod.id ? (
+                                    <form onSubmit={(e) => handleAddMaterial(e, mod.id)} className="flex flex-wrap items-center gap-2">
+                                      <input required placeholder="Material title" value={newMaterial.title}
+                                        onChange={(e) => setNewMaterial({ ...newMaterial, title: e.target.value })}
+                                        className="ws-input flex-1 min-w-[160px]" />
+                                      <input type="url" placeholder="External URL" value={newMaterial.external_url}
+                                        onChange={(e) => setNewMaterial({ ...newMaterial, external_url: e.target.value })}
+                                        className="ws-input flex-1 min-w-[160px]" />
+                                      <select value={newMaterial.material_type}
+                                        onChange={(e) => setNewMaterial({ ...newMaterial, material_type: e.target.value })}
+                                        className="ws-input">
+                                        <option>PDF</option><option>Video</option><option>Link</option>
+                                        <option>Document</option><option>Presentation</option><option>Code</option>
+                                      </select>
+                                      <button type="button" onClick={() => setShowAddMaterial(null)} className="p-1.5 text-slate-400 hover:text-slate-700">
+                                        <X className="w-4 h-4" />
+                                      </button>
+                                      <button type="submit" className="ws-btn-primary text-[12px] px-2.5 py-1.5">Add</button>
+                                    </form>
+                                  ) : (
+                                    <button onClick={() => setShowAddMaterial(mod.id)} className="flex items-center gap-1 text-[12.5px] font-medium text-primary-600 hover:text-primary-700">
+                                      <Plus className="w-3.5 h-3.5" /> Add Material
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+
+                              {!isTeacher && !isModuleCompleted(mod) && (
+                                <div className="mt-2 pt-2.5 border-t border-slate-100">
+                                  <button onClick={() => handleMarkComplete(mod.id)} className="flex items-center gap-1.5 text-[12.5px] font-medium text-emerald-600 hover:text-emerald-700">
+                                    <CheckCircle className="w-3.5 h-3.5" /> Mark module as Completed
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
-                      )}
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
 
-                      {!isTeacher && !isModuleCompleted(mod) && (
-                        <div className="mt-2 pt-2.5 border-t border-slate-100">
-                          <button onClick={() => handleMarkComplete(mod.id)} className="flex items-center gap-1.5 text-[12.5px] font-medium text-emerald-600 hover:text-emerald-700">
-                            <CheckCircle className="w-3.5 h-3.5" /> Mark as Completed
-                          </button>
+              {/* ============ RESOURCES ============ */}
+              {tab === 'resources' && (
+                <div className="space-y-4">
+                  {syllabus && (
+                    <div className="ws-card p-4 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="p-2.5 rounded-lg bg-rose-50 text-rose-600">
+                          <FileText className="w-5 h-5" />
+                        </span>
+                        <div>
+                          <p className="text-[13.5px] font-semibold text-slate-800">Semester Syllabus</p>
+                          <p className="text-[11.5px] text-slate-400">{selected.subject_code} · {selected.subject_title}</p>
                         </div>
+                      </div>
+                      {resourceUrl(syllabus) && (
+                        <a href={resourceUrl(syllabus)} target="_blank" rel="noreferrer" className="ws-btn-secondary">
+                          View syllabus
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </a>
                       )}
                     </div>
                   )}
+
+                  <div className="ws-card overflow-hidden">
+                    <div className="ws-card-header">
+                      <div className="relative w-full max-w-xs">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          value={resourceSearch}
+                          onChange={(e) => setResourceSearch(e.target.value)}
+                          placeholder="Search resources…"
+                          className="ws-input w-full pl-8"
+                        />
+                      </div>
+                      <select value={resourceType} onChange={(e) => setResourceType(e.target.value)} className="ws-input">
+                        {resourceTypes.map((t) => (
+                          <option key={t} value={t}>{t === 'all' ? 'All types' : t}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {filteredResources.length > 0 ? (
+                      <table className="ws-table">
+                        <thead>
+                          <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Updated</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredResources.map((m) => {
+                            const url = resourceUrl(m);
+                            return (
+                              <tr key={m.id} className="hover:bg-slate-50/60">
+                                <td>
+                                  {url ? (
+                                    <a
+                                      href={url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-2 text-[13px] font-medium text-slate-700 hover:text-primary-700"
+                                    >
+                                      {getTypeIcon(m.material_type)}
+                                      <span className="truncate max-w-[300px]">{m.title}</span>
+                                      <ExternalLink className="w-3 h-3 text-slate-300" />
+                                    </a>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-2 text-[13px] font-medium text-slate-700">
+                                      {getTypeIcon(m.material_type)}
+                                      <span className="truncate max-w-[300px]">{m.title}</span>
+                                    </span>
+                                  )}
+                                </td>
+                                <td>
+                                  <span className="text-[10.5px] text-slate-500 bg-slate-100 px-1.5 py-px rounded">
+                                    {m.material_type}
+                                  </span>
+                                </td>
+                                <td className="text-slate-400 whitespace-nowrap">{shortDate(m.created_at)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="px-4 py-10 text-center">
+                        <p className="text-[13px] font-medium text-slate-600">
+                          {allMaterials.length > 0 ? 'No resources match' : 'No resources yet'}
+                        </p>
+                        <p className="text-[12px] text-slate-400 mt-0.5">
+                          {allMaterials.length > 0
+                            ? 'Try adjusting your search or filters.'
+                            : 'Course files will appear here once the teacher adds them.'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </>
       )}
