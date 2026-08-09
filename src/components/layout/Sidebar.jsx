@@ -12,7 +12,7 @@ import Avatar from '../ui/Avatar';
 
 const WORKSPACE_LINKS = [
   { to: '/dashboard', label: 'Overview', icon: LayoutDashboard },
-  { to: '/roster', label: 'My Work', icon: ClipboardList },
+  { to: '/roster', label: 'Roster & Dockets', icon: ClipboardList },
   { to: '/announcements', label: 'Announcements', icon: Megaphone },
   { to: '/materials', label: 'Courses', icon: BookOpen },
   { to: '/classroom', label: 'Classroom', icon: Video },

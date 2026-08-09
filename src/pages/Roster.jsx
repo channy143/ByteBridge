@@ -13,15 +13,24 @@ import {
   Send,
   X,
   ClipboardList,
-  CalendarClock,
   FileText,
+  Link2,
   Loader2,
   CheckCircle2,
   AlertTriangle,
 } from 'lucide-react';
-import { getActivityStatus, formatDue, formatTimeLeft, isDueSoon } from '../lib/status';
+import { formatDue, formatTimeLeft } from '../lib/status';
 
-const STATUS_FILTERS = ['all', 'to do', 'submitted', 'graded', 'overdue'];
+const STUDENT_STATUSES = ['all', 'todo', 'submitted', 'passed', 'missing'];
+const TEACHER_STATUSES = ['all', 'nosubs', 'submitted'];
+const DEADLINE_FILTERS = [
+  { value: 'all', label: 'All deadlines' },
+  { value: 'today', label: 'Due today' },
+  { value: 'week', label: 'Due this week' },
+  { value: 'nextweek', label: 'Due next week' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'none', label: 'No deadline' },
+];
 
 export default function RosterAndDockets() {
   const { profile } = useAuth();
@@ -34,9 +43,12 @@ export default function RosterAndDockets() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [courseFilter, setCourseFilter] = useState('all');
+  const [deadlineFilter, setDeadlineFilter] = useState('all');
 
   const [selected, setSelected] = useState(null);
+  const [attachments, setAttachments] = useState([]);
   const [submitContent, setSubmitContent] = useState('');
+  const [submitLink, setSubmitLink] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [drawerSubs, setDrawerSubs] = useState([]);
   const [drawerSubsLoading, setDrawerSubsLoading] = useState(false);
@@ -99,19 +111,113 @@ export default function RosterAndDockets() {
 
   const getSubmission = (activityId) => submissions.find((s) => s.activity_id === activityId);
 
+  // --- Status helpers -----------------------------------------------------
+  const rosterStatus = (a, sub) => {
+    if (sub) {
+      if (sub.status === 'Graded' && sub.grade != null) return { label: 'Passed', tone: 'green' };
+      if (sub.status === 'Lacking') return { label: 'Lacking', tone: 'red' };
+      if (sub.status === 'Late') return { label: 'Late', tone: 'amber' };
+      return { label: 'Submitted', tone: 'green' };
+    }
+    const dl = a.deadline && new Date(a.deadline).getTime();
+    if (dl && dl < now) return { label: 'Missing', tone: 'red' };
+    return { label: 'To Do', tone: 'amber' };
+  };
+
+  const isDueSoon7 = (a) => {
+    const dl = a.deadline && new Date(a.deadline).getTime();
+    return !!dl && dl >= now && dl - now <= 7 * 86400000;
+  };
+
+  const deadlineNote = (a, sub) => {
+    if (sub) return null;
+    if (!a.deadline) return null;
+    const days = Math.ceil((new Date(a.deadline).getTime() - now) / 86400000);
+    if (days < 0) return { text: 'Missing', tone: 'text-red-600' };
+    if (days === 0) return { text: 'Due today', tone: 'text-red-600' };
+    if (days === 1) return { text: 'Due tomorrow', tone: 'text-amber-600' };
+    if (days <= 7) return { text: `${days} days left`, tone: 'text-amber-600' };
+    return { text: `${days} days left`, tone: 'text-slate-400' };
+  };
+
+  const matchesDeadline = (a) => {
+    const dl = a.deadline && new Date(a.deadline).getTime();
+    if (deadlineFilter === 'none') return !a.deadline;
+    if (!dl) return false;
+    const startToday = new Date();
+    startToday.setHours(0, 0, 0, 0);
+    const t = startToday.getTime();
+    const day = 86400000;
+    if (deadlineFilter === 'today') return dl >= t && dl < t + day;
+    if (deadlineFilter === 'week') return dl >= t && dl < t + 7 * day;
+    if (deadlineFilter === 'nextweek') return dl >= t + 7 * day && dl < t + 14 * day;
+    if (deadlineFilter === 'overdue') return dl < now;
+    return true;
+  };
+
+  // --- Overview counts ----------------------------------------------------
+  const withStatus = activities.map((a) => ({ a, sub: getSubmission(a.id), status: rosterStatus(a, getSubmission(a.id)) }));
+  const counts = isTeacher
+    ? {
+        all: activities.length,
+        nosubs: activities.filter((a) => (a.submissions?.[0]?.count ?? 0) < 1).length,
+        submitted: activities.filter((a) => (a.submissions?.[0]?.count ?? 0) > 0).length,
+      }
+    : {
+        all: withStatus.length,
+        todo: withStatus.filter((r) => r.status.label === 'To Do').length,
+        duesoon: withStatus.filter((r) => r.status.label === 'To Do' && isDueSoon7(r.a)).length,
+        missing: withStatus.filter((r) => r.status.label === 'Missing').length,
+        passed: withStatus.filter((r) => r.status.label === 'Passed').length,
+      };
+  const missingCount = isTeacher ? 0 : counts.missing;
+
+  const CHIPS = isTeacher
+    ? [
+        { key: 'all', label: 'Total' },
+        { key: 'nosubs', label: 'No submissions' },
+        { key: 'submitted', label: 'Submitted' },
+      ]
+    : [
+        { key: 'all', label: 'Total' },
+        { key: 'todo', label: 'To Do' },
+        { key: 'duesoon', label: 'Due Soon' },
+        { key: 'missing', label: 'Missing' },
+        { key: 'passed', label: 'Passed' },
+      ];
+
   const filteredActivities = activities.filter((a) => {
     if (courseFilter !== 'all' && a.subject_id !== courseFilter) return false;
     if (search) {
       const q = search.toLowerCase();
       if (!a.title.toLowerCase().includes(q) && !(a.description || '').toLowerCase().includes(q)) return false;
     }
-    if (!isTeacher && statusFilter !== 'all') {
-      const st = getActivityStatus(a, getSubmission(a.id), now).label.toLowerCase();
-      if (st !== statusFilter) return false;
+    if (!matchesDeadline(a)) return false;
+    if (statusFilter !== 'all') {
+      if (isTeacher) {
+        const count = a.submissions?.[0]?.count ?? 0;
+        if (statusFilter === 'nosubs' && count >= 1) return false;
+        if (statusFilter === 'submitted' && count < 1) return false;
+      } else {
+        const st = rosterStatus(a, getSubmission(a.id)).label.toLowerCase();
+        if (statusFilter === 'duesoon') {
+          if (st !== 'to do' || !isDueSoon7(a)) return false;
+        } else if (st !== statusFilter) {
+          return false;
+        }
+      }
     }
     return true;
   });
 
+  const statusOptions = isTeacher ? TEACHER_STATUSES : STUDENT_STATUSES;
+  const statusLabel = (v) =>
+    v === 'all' ? 'All statuses'
+    : v === 'nosubs' ? 'No submissions'
+    : v === 'duesoon' ? 'Due soon'
+    : v.charAt(0).toUpperCase() + v.slice(1);
+
+  // --- Actions ------------------------------------------------------------
   const handleCreate = async (e) => {
     e.preventDefault();
     setCreating(true);
@@ -140,6 +246,14 @@ export default function RosterAndDockets() {
   const openActivity = async (activity) => {
     setSelected(activity);
     setSubmitContent('');
+    setSubmitLink('');
+    setAttachments([]);
+    try {
+      const attRes = await supabase.from('activity_attachments').select('*').eq('activity_id', activity.id);
+      if (!attRes.error) setAttachments(attRes.data || []);
+    } catch (err) {
+      console.error('Error loading attachments:', err);
+    }
     if (!isTeacher) return;
     setDrawerSubsLoading(true);
     setDrawerSubs([]);
@@ -164,19 +278,21 @@ export default function RosterAndDockets() {
   };
 
   const handleSubmitActivity = async () => {
-    if (!selected || !submitContent.trim()) return;
+    if (!selected || (!submitContent.trim() && !submitLink.trim())) return;
     setSubmitting(true);
     try {
       const isLate = selected.deadline && new Date(selected.deadline) < new Date();
       const { error } = await supabase.from('submissions').insert([{
         activity_id: selected.id,
         student_id: profile.id,
-        content: submitContent.trim(),
+        content: submitContent.trim() || null,
+        file_url: submitLink.trim() || null,
         status: isLate ? 'Late' : 'Submitted',
       }]);
       if (error) throw error;
       setSubmitContent('');
-      fetchData();
+      setSubmitLink('');
+      await fetchData();
       setSelected((prev) => ({ ...prev }));
       openActivity(selected);
     } catch (err) {
@@ -223,12 +339,19 @@ export default function RosterAndDockets() {
   };
 
   const selectedSub = selected ? getSubmission(selected.id) : null;
+  const selectedStatus = selected && !isTeacher ? rosterStatus(selected, selectedSub) : null;
+  const gradedCount = drawerSubs.filter((s) => s.status === 'Graded' && s.grade != null).length;
+
+  const courseList = assignedSubjects.length ? assignedSubjects : subjects;
+  const courseLabel = (id) => courseList.find((s) => s.id === id)?.subject_code || 'Global';
 
   return (
     <div>
       <PageHeader
-        title="My Work"
-        subtitle={isTeacher ? 'Activities you created and their submission status.' : 'Assignments, tasks, and deadlines from your courses.'}
+        title="Roster & Dockets"
+        subtitle={isTeacher
+          ? 'Manage activities and student submissions.'
+          : 'Track activities, projects, deadlines, and submissions from your courses.'}
         actions={
           isTeacher ? (
             <>
@@ -244,30 +367,64 @@ export default function RosterAndDockets() {
       />
 
       {/* Toolbar */}
-      <div className="ws-card mb-4 px-3 py-2.5 flex flex-wrap items-center gap-2">
+      <div className="ws-card mb-3 px-3 py-2.5 flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[180px] max-w-xs">
           <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search tasks…"
+            placeholder="Search activities…"
             className="ws-input w-full pl-8"
           />
         </div>
-        {!isTeacher && (
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="ws-input">
-            {STATUS_FILTERS.map((s) => (
-              <option key={s} value={s}>{s === 'all' ? 'All statuses' : s}</option>
-            ))}
-          </select>
-        )}
         <select value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)} className="ws-input">
           <option value="all">All courses</option>
-          {(assignedSubjects.length ? assignedSubjects : subjects).map((s) => (
+          {courseList.map((s) => (
             <option key={s.id} value={s.id}>{s.subject_code}</option>
           ))}
         </select>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="ws-input">
+          {statusOptions.map((v) => (
+            <option key={v} value={v}>{statusLabel(v)}</option>
+          ))}
+        </select>
+        <select value={deadlineFilter} onChange={(e) => setDeadlineFilter(e.target.value)} className="ws-input">
+          {DEADLINE_FILTERS.map((d) => (
+            <option key={d.value} value={d.value}>{d.label}</option>
+          ))}
+        </select>
       </div>
+
+      {/* Work overview: clickable status chips */}
+      <div className="ws-card mb-4 px-3 py-2 flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mr-1">Overview</span>
+        {CHIPS.map((c) => (
+          <button
+            key={c.key}
+            onClick={() => setStatusFilter(c.key)}
+            className={`px-2.5 py-1 rounded-md border text-[12px] font-medium transition-colors ${
+              statusFilter === c.key
+                ? 'bg-primary-600 text-white border-primary-600'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-primary-300 hover:text-primary-700'
+            }`}
+          >
+            <span className="font-bold">{counts[c.key] ?? 0}</span> {c.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Missing alert */}
+      {!isTeacher && missingCount > 0 && (
+        <div className="ws-card mb-4 px-4 py-2.5 flex items-center gap-2.5 bg-red-50 border-red-100">
+          <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
+          <p className="text-[12.5px] text-red-800">
+            <span className="font-bold">{missingCount}</span> requirement{missingCount > 1 ? 's are' : ' is'} missing — deadline passed without submission.
+          </p>
+          <button onClick={() => setStatusFilter('missing')} className="ml-auto text-[12px] font-semibold text-red-700 hover:text-red-900 whitespace-nowrap flex-shrink-0">
+            View missing →
+          </button>
+        </div>
+      )}
 
       {/* Class roster modal */}
       {showRoster && isTeacher && (
@@ -361,8 +518,10 @@ export default function RosterAndDockets() {
         ) : filteredActivities.length === 0 ? (
           <EmptyState
             icon={<ClipboardList className="w-7 h-7" />}
-            title={isTeacher ? 'No activities yet' : 'No tasks match your filters'}
-            description={isTeacher ? "You haven't created any activities yet." : "Try adjusting your filters, or you're all caught up."}
+            title={isTeacher ? 'No activities yet' : 'No requirements match your filters'}
+            description={isTeacher
+              ? "You haven't created any activities yet."
+              : "Try adjusting your filters, or you're all caught up."}
             action={isTeacher ? <button onClick={() => setShowCreate(true)} className="ws-btn-primary"><Plus className="w-4 h-4" /> Create Activity</button> : null}
           />
         ) : (
@@ -370,9 +529,9 @@ export default function RosterAndDockets() {
             <table className="ws-table">
               <thead>
                 <tr>
-                  <th>Task</th>
+                  <th>Activity</th>
                   <th>Course</th>
-                  <th>Due</th>
+                  <th>Deadline</th>
                   <th>{isTeacher ? 'Submissions' : 'Status'}</th>
                   <th className="w-10"></th>
                 </tr>
@@ -383,9 +542,9 @@ export default function RosterAndDockets() {
                   const count = a.submissions?.[0]?.count ?? 0;
                   const st = isTeacher
                     ? { label: `${count} submitted`, tone: count > 0 ? 'green' : 'gray' }
-                    : getActivityStatus(a, sub, now);
+                    : rosterStatus(a, sub);
+                  const note = isTeacher ? null : deadlineNote(a, sub);
                   const left = a.deadline ? formatTimeLeft(a.deadline, now) : null;
-                  const course = (assignedSubjects.length ? assignedSubjects : subjects).find((s) => s.id === a.subject_id);
                   return (
                     <tr key={a.id} className="cursor-pointer" onClick={() => openActivity(a)}>
                       <td className="max-w-[300px]">
@@ -397,21 +556,25 @@ export default function RosterAndDockets() {
                       </td>
                       <td>
                         <span className="text-[12px] font-semibold text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded">
-                          {course?.subject_code || 'Global'}
+                          {courseLabel(a.subject_id)}
                         </span>
                       </td>
                       <td className="whitespace-nowrap">
-                        <span className={`flex items-center gap-1.5 ${isDueSoon(a, now) && !sub ? 'text-amber-600' : 'text-slate-500'}`}>
-                          <CalendarClock className="w-3.5 h-3.5" />
-                          {a.deadline ? (
-                            <>
+                        {a.deadline ? (
+                          <>
+                            <p className="text-[12.5px] font-medium text-slate-700">
                               {formatDue(a.deadline, now)}
-                              {left && !isTeacher && !sub && (
-                                <span className="text-[11px] text-red-500">{left}</span>
+                            </p>
+                            <p className={`text-[10.5px] ${note?.tone || 'text-slate-400'}`}>
+                              {note ? note.text : (sub ? 'Submitted' : '')}
+                              {left && !isTeacher && !sub && note?.text !== 'Missing' && (
+                                <span className="text-slate-300"> · {left}</span>
                               )}
-                            </>
-                          ) : 'No deadline'}
-                        </span>
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-[12.5px] text-slate-400">No deadline</p>
+                        )}
                       </td>
                       <td>
                         <StatusBadge {...st} dot />
@@ -439,30 +602,72 @@ export default function RosterAndDockets() {
           <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[12px] font-semibold text-primary-700 bg-primary-50 px-2 py-0.5 rounded">
-                {(assignedSubjects.length ? assignedSubjects : subjects).find((s) => s.id === selected.subject_id)?.subject_code || 'Global'}
+                {courseLabel(selected.subject_id)}
               </span>
-              {!isTeacher && <StatusBadge {...getActivityStatus(selected, selectedSub, now)} dot />}
+              {!isTeacher && selectedStatus && <StatusBadge {...selectedStatus} dot />}
               {isTeacher && (
                 <StatusBadge label={`${drawerSubs.length} submissions`} tone={drawerSubs.length > 0 ? 'green' : 'gray'} />
               )}
             </div>
 
+            {/* Deadline */}
             {selected.deadline && (
-              <div className={`flex items-center gap-2 text-[12.5px] ${new Date(selected.deadline) < new Date() ? 'text-red-600' : 'text-amber-600'}`}>
-                <CalendarClock className="w-4 h-4" />
-                Due {new Date(selected.deadline).toLocaleString()}
-                {!isTeacher && !selectedSub && formatTimeLeft(selected.deadline, now) && (
-                  <span className="font-semibold">· {formatTimeLeft(selected.deadline, now)} left</span>
+              <div className="bg-slate-50 border border-slate-100 rounded-md p-3">
+                <p className="ws-label mb-1">Deadline</p>
+                <p className="text-[13px] font-semibold text-slate-800">
+                  {new Date(selected.deadline).toLocaleString()}
+                </p>
+                {!isTeacher && (
+                  <p className={`text-[11.5px] mt-0.5 font-medium ${selectedSub ? 'text-emerald-600' : deadlineNote(selected, selectedSub)?.text === 'Missing' ? 'text-red-600' : deadlineNote(selected, selectedSub)?.text ? 'text-amber-600' : 'text-slate-400'}`}>
+                    {selectedSub
+                      ? 'Submitted'
+                      : deadlineNote(selected, selectedSub)?.text || 'No relative deadline'}
+                  </p>
                 )}
               </div>
             )}
 
+            {/* Missing warning */}
+            {!isTeacher && !selectedSub && deadlineNote(selected, selectedSub)?.text === 'Missing' && (
+              <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-md p-3">
+                <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-[12.5px] font-semibold text-red-800">No submission received</p>
+                  <p className="text-[11.5px] text-red-700 mt-0.5">
+                    Deadline: {new Date(selected.deadline).toLocaleString()}. This requirement is now marked as missing.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Instructions */}
             {selected.description && (
               <div>
                 <h3 className="ws-label mb-1.5">Instructions</h3>
-                <p className="text-[13px] text-slate-700 whitespace-pre-wrap bg-slate-50 border border-slate-100 rounded-md p-3">
+                <p className="text-[13px] text-slate-700 whitespace-pre-wrap bg-slate-50 border border-slate-100 rounded-md p-3 leading-relaxed">
                   {selected.description}
                 </p>
+              </div>
+            )}
+
+            {/* Attachments */}
+            {attachments.length > 0 && (
+              <div>
+                <h3 className="ws-label mb-1.5">Attachments</h3>
+                <div className="space-y-1.5">
+                  {attachments.map((at) => (
+                    <a
+                      key={at.id}
+                      href={at.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-3 py-2 rounded-md border border-slate-200 hover:border-primary-300 hover:bg-primary-50/40 transition-colors text-[12.5px] font-medium text-slate-700"
+                    >
+                      <FileText className="w-4 h-4 text-primary-600 flex-shrink-0" />
+                      <span className="truncate">{at.file_name}</span>
+                    </a>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -475,26 +680,30 @@ export default function RosterAndDockets() {
                     <div className="flex items-center gap-2 text-[12.5px] text-slate-600">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                       Submitted {new Date(selectedSub.submitted_at).toLocaleString()}
-                      {selectedSub.status === 'Late' && (
-                        <StatusBadge label="Late" tone="amber" />
-                      )}
+                      {selectedSub.status === 'Late' && <StatusBadge label="Late" tone="amber" />}
                     </div>
                     {selectedSub.content && (
                       <p className="text-[13px] text-slate-700 whitespace-pre-wrap bg-slate-50 border border-slate-100 rounded-md p-3">
                         {selectedSub.content}
                       </p>
                     )}
+                    {selectedSub.file_url && (
+                      <a href={selectedSub.file_url} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-[12.5px] font-medium text-primary-600 hover:text-primary-700">
+                        <Link2 className="w-3.5 h-3.5" /> View submitted link
+                      </a>
+                    )}
                     {selectedSub.status === 'Graded' && selectedSub.grade != null ? (
                       <div className="bg-emerald-50 border border-emerald-200 rounded-md p-3">
                         <p className="text-[13px] font-semibold text-emerald-700">
-                          Grade: {selectedSub.grade}/{selected.points}
+                          Passed · {selectedSub.grade}/{selected.points}
                         </p>
                         {selectedSub.feedback && (
-                          <p className="mt-1 text-[12.5px] text-emerald-800">{selectedSub.feedback}</p>
+                          <p className="mt-1 text-[12.5px] text-emerald-800">"{selectedSub.feedback}"</p>
                         )}
                       </div>
                     ) : (
-                      <p className="text-[12px] text-slate-400">Awaiting grade.</p>
+                      <p className="text-[12px] text-slate-400">Awaiting teacher review.</p>
                     )}
                   </div>
                 ) : (
@@ -506,13 +715,20 @@ export default function RosterAndDockets() {
                       placeholder="Type your answer or submission notes…"
                       className="ws-input w-full resize-none"
                     />
+                    <input
+                      type="url"
+                      value={submitLink}
+                      onChange={(e) => setSubmitLink(e.target.value)}
+                      placeholder="Add a link to your work (optional)"
+                      className="ws-input w-full"
+                    />
                     <div className="flex justify-end">
                       <button
                         onClick={handleSubmitActivity}
-                        disabled={submitting || !submitContent.trim()}
+                        disabled={submitting || (!submitContent.trim() && !submitLink.trim())}
                         className="ws-btn-primary"
                       >
-                        {submitting ? 'Submitting…' : (<><Send className="w-4 h-4" /> Submit Activity</>)}
+                        {submitting ? 'Submitting…' : (<><Send className="w-4 h-4" /> Submit Work</>)}
                       </button>
                     </div>
                   </div>
@@ -523,7 +739,15 @@ export default function RosterAndDockets() {
             {/* Teacher: grading */}
             {isTeacher && (
               <div className="border-t border-slate-100 pt-4">
-                <h3 className="ws-label mb-2">Submissions ({drawerSubs.length})</h3>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <h3 className="ws-label">Submissions ({drawerSubs.length})</h3>
+                  {drawerSubs.length > 0 && (
+                    <div className="ml-auto flex gap-1.5">
+                      <StatusBadge label={`${gradedCount} passed`} tone="green" />
+                      <StatusBadge label={`${drawerSubs.length - gradedCount} pending`} tone="amber" />
+                    </div>
+                  )}
+                </div>
                 {drawerSubsLoading ? (
                   <div className="py-8 flex justify-center"><Loader2 className="h-5 w-5 text-primary-500 animate-spin" /></div>
                 ) : drawerSubs.length === 0 ? (
@@ -544,7 +768,7 @@ export default function RosterAndDockets() {
                               <p className="text-[11px] text-slate-400">{sub.student?.student_id || ''}</p>
                             </div>
                             <StatusBadge
-                              label={sub.status === 'Graded' && sub.grade != null ? `Graded ${sub.grade}/${selected.points}` : sub.status}
+                              label={sub.status === 'Graded' && sub.grade != null ? `Passed ${sub.grade}/${selected.points}` : sub.status}
                               tone={sub.status === 'Graded' ? 'green' : sub.status === 'Late' ? 'amber' : 'gray'}
                             />
                           </div>
@@ -552,6 +776,12 @@ export default function RosterAndDockets() {
                             <p className="mt-2 text-[12.5px] text-slate-600 whitespace-pre-wrap bg-slate-50 rounded p-2.5">
                               {sub.content}
                             </p>
+                          )}
+                          {sub.file_url && (
+                            <a href={sub.file_url} target="_blank" rel="noopener noreferrer"
+                              className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-medium text-primary-600 hover:text-primary-700">
+                              <Link2 className="w-3.5 h-3.5" /> Open submission link
+                            </a>
                           )}
                           <div className="mt-2.5 flex flex-wrap items-center gap-2">
                             <input
