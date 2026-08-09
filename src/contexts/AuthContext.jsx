@@ -189,6 +189,7 @@ export function AuthProvider({ children }) {
       signInAsTeacher,
       signInAsStudent,
       resetPassword,
+      refreshProfile: () => user ? fetchProfile(user.id, user) : Promise.resolve(),
     }}>
       {!loading && children}
     </AuthContext.Provider>

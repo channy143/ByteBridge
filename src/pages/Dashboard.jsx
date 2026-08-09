@@ -38,7 +38,10 @@ export default function Dashboard() {
     (async () => {
       try {
         const isTeacher = profile?.role === 'teacher';
-        const [subjRes, actRes, annRes, sesRes, modRes, matRes, subRes, tsRes] = await Promise.all([
+        const enrRes = isTeacher
+          ? Promise.resolve({ data: [], error: null })
+          : supabase.from('enrollments').select('subject_id').eq('student_id', profile?.id);
+        const [subjRes, actRes, annRes, sesRes, modRes, matRes, subRes, tsRes, enrData] = await Promise.all([
           supabase.from('subjects').select('id, subject_code, subject_title'),
           supabase
             .from('activities')
@@ -51,10 +54,10 @@ export default function Dashboard() {
             .limit(8),
           supabase
             .from('meeting_sessions')
-            .select('id, room_name, started_at')
+            .select('id, subject_id, room_name, started_at')
             .is('ended_at', null)
             .order('started_at', { ascending: false })
-            .limit(1),
+            .limit(10),
           supabase.from('modules').select('id, subject_id, title, created_at, module_progress (*)'),
           supabase
             .from('course_materials')
@@ -67,14 +70,21 @@ export default function Dashboard() {
           isTeacher
             ? supabase.from('teacher_subjects').select('subject_id')
             : Promise.resolve({ data: [], error: null }),
+          enrRes,
         ]);
         if (!active) return;
-        if (!subjRes.error) setSubjects(subjRes.data || []);
-        if (!actRes.error) setActivities(actRes.data || []);
-        if (!annRes.error) setAnnouncements(annRes.data || []);
-        if (!sesRes.error) setLiveSession(sesRes.data?.[0] || null);
-        if (!modRes.error) setModules(modRes.data || []);
-        if (!matRes.error) setMaterials(matRes.data || []);
+
+        // Scope everything to the student's enrolled subjects (null = all, fallback).
+        // Global items (subject_id null) are always included.
+        const enrolledIds = enrData.error ? null : new Set((enrData.data || []).map((e) => e.subject_id));
+        const scoped = (sid) => enrolledIds == null || sid == null || enrolledIds.has(sid);
+
+        if (!subjRes.error) setSubjects((subjRes.data || []).filter((s) => enrolledIds == null || enrolledIds.has(s.id)));
+        if (!actRes.error) setActivities((actRes.data || []).filter((a) => scoped(a.subject_id)));
+        if (!annRes.error) setAnnouncements((annRes.data || []).filter((a) => scoped(a.subject_id)));
+        if (!sesRes.error) setLiveSession((sesRes.data || []).find((s) => scoped(s.subject_id)) || null);
+        if (!modRes.error) setModules((modRes.data || []).filter((m) => scoped(m.subject_id)));
+        if (!matRes.error) setMaterials((matRes.data || []).filter((mat) => scoped(mat.module?.subject_id)));
         if (!subRes.error) setSubmissions(subRes.data || []);
         if (isTeacher && !tsRes.error) {
           const mine = new Set((tsRes.data || []).map((r) => r.subject_id));
@@ -345,7 +355,11 @@ export default function Dashboard() {
               </button>
             </div>
             {subjects.length === 0 ? (
-              <EmptyState icon={<BookOpen className="w-7 h-7" />} title="No courses published yet" description="Courses will appear here once published." />
+              <EmptyState
+                icon={<BookOpen className="w-7 h-7" />}
+                title={isTeacher ? 'No courses published yet' : 'You\'re not enrolled in any courses yet'}
+                description={isTeacher ? 'Courses will appear here once published.' : 'Ask your instructor or administrator to add you to a subject.'}
+              />
             ) : (
               <div className="divide-y divide-slate-100">
                 {subjects.map((s) => {
