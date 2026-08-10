@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { GraduationCap, User, ShieldCheck, X } from 'lucide-react';
@@ -32,59 +32,29 @@ export default function Login() {
   const [regError, setRegError] = useState('');
   const [regSaving, setRegSaving] = useState(false);
 
-  // Hidden admin login: press CTRL + A, then T + A. No visible hint.
+  // Hidden admin login: press CTRL + ALT + A. No visible hint.
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminForm, setAdminForm] = useState({ email: '', password: '' });
   const [adminError, setAdminError] = useState('');
   const [adminLoading, setAdminLoading] = useState(false);
-  const seqRef = useRef({ keys: [], timer: null });
 
   useEffect(() => {
-    const resetSeq = () => {
-      if (seqRef.current.timer) clearTimeout(seqRef.current.timer);
-      seqRef.current = { keys: [], timer: null };
-    };
-
     const onKeyDown = (e) => {
       if (e.key === 'Escape') {
-        resetSeq();
         setAdminOpen(false);
+        setAdminError('');
         return;
       }
 
-      const k = e.key.toLowerCase();
-      if (e.ctrlKey && k === 'a') {
-        // CTRL + A arms the sequence
+      if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'a') {
         e.preventDefault();
-        resetSeq();
-        seqRef.current.keys = ['a'];
-        seqRef.current.timer = setTimeout(resetSeq, 4000);
-        return;
-      }
-
-      const next = [...seqRef.current.keys, k];
-      if (next.length > 3) {
-        resetSeq();
-        return;
-      }
-      if (next[0] !== 'a') return;
-      if (['t', 'a'].slice(0, next.length - 1).join('') !== next.slice(0, next.length - 1).join('')) {
-        resetSeq();
-        return;
-      }
-      seqRef.current.keys = next;
-      if (next[0] === 'a' && next[1] === 't' && next[2] === 'a') {
-        resetSeq();
         setAdminOpen(true);
         setAdminError('');
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      resetSeq();
-    };
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
   // Wait for auth to finish loading before redirecting automatically
@@ -376,7 +346,7 @@ export default function Login() {
           </form>
         )}
 
-        {/* Hidden Admin Login (CTRL + A, then T + A) */}
+        {/* Hidden Admin Login (CTRL + ALT + A) */}
         {adminOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
             <div
