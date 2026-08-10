@@ -655,14 +655,28 @@ export default function TeacherTimetables() {
 
       {/* Activity modal */}
       {activityOpen && (
-        <div className={modalShell}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-slate-900/40" onClick={() => { setActivityOpen(false); setCreateOpen(true); }} />
-          <div className={modalCard}>
-            <h3 className="text-[15px] font-bold text-slate-900">Create Activity</h3>
-            <p className="text-[12px] text-slate-400 mt-0.5 mb-4">
-              Due {selectedDate.date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })} (editable below).
-            </p>
-            <form onSubmit={saveActivity} className="space-y-4">
+          <div className="relative w-full max-w-xl bg-white rounded-xl border border-slate-200 shadow-2xl overflow-hidden">
+            <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100">
+              <span className="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+                <FileText className="w-4.5 h-4.5" />
+              </span>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-[14.5px] font-bold text-slate-900">New Activity</h3>
+                <p className="text-[11.5px] text-slate-400 truncate">
+                  Due <span className="font-medium text-slate-600">{selectedDate.date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span> · editable
+                </p>
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-100 rounded-full px-2 py-0.5 flex-shrink-0">
+                {activityForm.activity_type || 'Assignment'}
+              </span>
+              <button onClick={() => { setActivityOpen(false); setCreateOpen(true); }} className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex-shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form id="activity-form" onSubmit={saveActivity} className="px-5 py-4 space-y-4 max-h-[calc(90vh-110px)] overflow-y-auto">
               <div>
                 <label className="ws-label">Subject</label>
                 <select value={activityForm.subject_id} onChange={(e) => setActivityForm({ ...activityForm, subject_id: e.target.value })} className={fieldClass} required>
@@ -677,10 +691,12 @@ export default function TeacherTimetables() {
                   </p>
                 )}
               </div>
+
               <div>
                 <label className="ws-label">Activity Title</label>
                 <input required value={activityForm.title} onChange={(e) => setActivityForm({ ...activityForm, title: e.target.value })} placeholder="e.g. Video Editing Task" className={fieldClass} />
               </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="ws-label">Activity Type</label>
@@ -693,49 +709,65 @@ export default function TeacherTimetables() {
                   <input type="datetime-local" value={activityForm.deadline} onChange={(e) => setActivityForm({ ...activityForm, deadline: e.target.value })} className={fieldClass} />
                 </div>
               </div>
+
               <div>
                 <label className="ws-label">Instructions</label>
-                <textarea rows={3} value={activityForm.description} onChange={(e) => setActivityForm({ ...activityForm, description: e.target.value })} placeholder="Provide instructions for the activity…" className={`${fieldClass} resize-none`} />
+                <textarea rows={2} value={activityForm.description} onChange={(e) => setActivityForm({ ...activityForm, description: e.target.value })} placeholder="Optional — provide instructions for the activity…" className={`${fieldClass} resize-none`} />
               </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="ws-label">Points</label>
                   <input type="number" min={1} value={activityForm.points} onChange={(e) => setActivityForm({ ...activityForm, points: e.target.value })} className={fieldClass} />
                 </div>
                 <div>
-                  <label className="ws-label">Grading Criteria (optional)</label>
-                  <input value={activityForm.grading_criteria} onChange={(e) => setActivityForm({ ...activityForm, grading_criteria: e.target.value })} placeholder="Rubric summary" className={fieldClass} />
+                  <label className="ws-label">Grading Criteria</label>
+                  <input value={activityForm.grading_criteria} onChange={(e) => setActivityForm({ ...activityForm, grading_criteria: e.target.value })} placeholder="Rubric summary (optional)" className={fieldClass} />
                 </div>
               </div>
-              <div>
-                <label className="ws-label">Color (shown on the calendar)</label>
-                <div className="mt-1.5">
-                  <ColorPicker value={activityForm.color} onChange={(color) => setActivityForm({ ...activityForm, color })} />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                <button type="button" onClick={() => { setActivityOpen(false); setCreateOpen(true); }} className="ws-btn-secondary">
-                  <X className="w-4 h-4" /> Cancel
-                </button>
-                <button type="submit" disabled={activitySaving || !activityForm.subject_id} className="ws-btn-primary">
-                  {activitySaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating…</> : <><FileText className="w-4 h-4" /> Create Activity</>}
-                </button>
+
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Calendar color</span>
+                <ColorPicker value={activityForm.color} onChange={(color) => setActivityForm({ ...activityForm, color })} />
               </div>
             </form>
+
+            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/60 flex items-center justify-end gap-2">
+              <button type="button" onClick={() => { setActivityOpen(false); setCreateOpen(true); }} className="ws-btn-secondary">
+                <X className="w-4 h-4" /> Cancel
+              </button>
+              <button type="submit" form="activity-form" disabled={activitySaving || !activityForm.subject_id} className="ws-btn-primary">
+                {activitySaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating…</> : <><FileText className="w-4 h-4" /> Create Activity</>}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* Scheduled class modal */}
       {classOpen && (
-        <div className={modalShell}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-slate-900/40" onClick={() => { setClassOpen(false); setCreateOpen(true); }} />
-          <div className={modalCard}>
-            <h3 className="text-[15px] font-bold text-slate-900">Schedule Video Class</h3>
-            <p className="text-[12px] text-slate-400 mt-0.5 mb-4">
-              {selectedDate.date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })} (editable below).
-            </p>
-            <form onSubmit={saveClass} className="space-y-4">
+          <div className="relative w-full max-w-xl bg-white rounded-xl border border-slate-200 shadow-2xl overflow-hidden">
+            <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100">
+              <span className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                <Video className="w-4.5 h-4.5" />
+              </span>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-[14.5px] font-bold text-slate-900">Schedule Video Class</h3>
+                <p className="text-[11.5px] text-slate-400 truncate">
+                  {selectedDate.date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} · editable
+                </p>
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-blue-700 bg-blue-50 border border-blue-100 rounded-full px-2 py-0.5 flex-shrink-0">
+                Live session
+              </span>
+              <button onClick={() => { setClassOpen(false); setCreateOpen(true); }} className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex-shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form id="class-form" onSubmit={saveClass} className="px-5 py-4 space-y-4 max-h-[calc(90vh-110px)] overflow-y-auto">
               <div>
                 <label className="ws-label">Subject</label>
                 <select value={classForm.subject_id} onChange={(e) => setClassForm({ ...classForm, subject_id: e.target.value })} className={fieldClass} required>
@@ -750,10 +782,12 @@ export default function TeacherTimetables() {
                   </p>
                 )}
               </div>
+
               <div>
                 <label className="ws-label">Class Title</label>
                 <input required value={classForm.title} onChange={(e) => setClassForm({ ...classForm, title: e.target.value })} placeholder="e.g. Lecture: Network Fundamentals" className={fieldClass} />
               </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="ws-label">Start</label>
@@ -764,21 +798,21 @@ export default function TeacherTimetables() {
                   <input type="datetime-local" value={classForm.ends_at} onChange={(e) => setClassForm({ ...classForm, ends_at: e.target.value })} className={fieldClass} required />
                 </div>
               </div>
-              <div>
-                <label className="ws-label">Color (shown on the calendar)</label>
-                <div className="mt-1.5">
-                  <ColorPicker value={classForm.color} onChange={(color) => setClassForm({ ...classForm, color })} />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                <button type="button" onClick={() => { setClassOpen(false); setCreateOpen(true); }} className="ws-btn-secondary">
-                  <X className="w-4 h-4" /> Cancel
-                </button>
-                <button type="submit" disabled={classSaving || !classForm.subject_id} className="ws-btn-primary">
-                  {classSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Scheduling…</> : <><Video className="w-4 h-4" /> Schedule Class</>}
-                </button>
+
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Calendar color</span>
+                <ColorPicker value={classForm.color} onChange={(color) => setClassForm({ ...classForm, color })} />
               </div>
             </form>
+
+            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/60 flex items-center justify-end gap-2">
+              <button type="button" onClick={() => { setClassOpen(false); setCreateOpen(true); }} className="ws-btn-secondary">
+                <X className="w-4 h-4" /> Cancel
+              </button>
+              <button type="submit" form="class-form" disabled={classSaving || !classForm.subject_id} className="ws-btn-primary">
+                {classSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Scheduling…</> : <><Video className="w-4 h-4" /> Schedule Class</>}
+              </button>
+            </div>
           </div>
         </div>
       )}
