@@ -370,14 +370,14 @@ export default function TeacherDashboard() {
   ];
 
   return (
-    <div>
+    <div className="flex flex-col lg:h-[calc(100vh-96px)]">
       <PageHeader
         title={`${greeting()}, ${firstName(profile?.full_name)}`}
         subtitle="Here's what's happening with your BTLED ICT subjects."
       />
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5 flex-shrink-0">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="ws-card px-4 py-3">
@@ -399,9 +399,9 @@ export default function TeacherDashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
         {/* My Subjects */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-4 min-h-0">
           <div className="ws-card h-full flex flex-col">
             <div className="ws-card-header">
               <h2 className="ws-section-title">My Subjects</h2>
@@ -485,9 +485,9 @@ export default function TeacherDashboard() {
         </div>
 
         {/* Timetable mini calendar */}
-        <div className="space-y-4">
-          <div className="ws-card">
-            <div className="ws-card-header">
+        <div className="space-y-4 min-h-0">
+          <div className="ws-card h-full flex flex-col">
+            <div className="ws-card-header flex-shrink-0">
               <h2 className="ws-section-title">Timetable</h2>
               <button
                 onClick={() => navigate('/teacher/timetables')}
@@ -498,7 +498,7 @@ export default function TeacherDashboard() {
             </div>
 
             {loading ? (
-              <div className="p-4">
+              <div className="p-4 flex-1 min-h-0 overflow-y-auto">
                 <Skeleton className="h-4 w-32 rounded mb-3" />
                 <div className="grid grid-cols-7 mb-1">
                   {Array.from({ length: 7 }).map((_, i) => (
@@ -522,7 +522,7 @@ export default function TeacherDashboard() {
             ) : (
               <>
                 {/* Month label */}
-                <div className="px-4 pt-1 pb-2">
+                <div className="px-4 pt-1 pb-2 flex-shrink-0">
                   <p className="text-[13px] font-semibold text-slate-800">
                     {MONTH_NAMES[calMonth.getMonth()]} {calMonth.getFullYear()}
                   </p>
@@ -531,7 +531,7 @@ export default function TeacherDashboard() {
                 {/* Zoomable calendar viewport */}
                 <div
                   ref={containerRef}
-                  className="relative overflow-hidden px-2 select-none cursor-grab active:cursor-grabbing"
+                  className="relative overflow-hidden px-2 select-none cursor-grab active:cursor-grabbing flex-1 min-h-0"
                   style={{ touchAction: 'none' }}
                   onPointerDown={onPointerDown}
                   onPointerMove={onPointerMove}
@@ -611,7 +611,7 @@ export default function TeacherDashboard() {
                 </div>
 
                 {/* Legend */}
-                <div className="px-4 pb-4 flex items-center gap-3 flex-wrap">
+                <div className="px-4 pb-4 flex items-center gap-3 flex-wrap flex-shrink-0">
                   {Object.entries(EVENT_DOT).map(([key, dot]) => (
                     <div key={key} className="flex items-center gap-1">
                       <span className={`w-2 h-2 rounded-full ${dot}`} />
