@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 import { Skeleton } from '../components/ui/Skeleton';
@@ -33,12 +33,16 @@ export default function TeacherSubjectPage() {
   const { subjectId } = useParams();
   const { profile } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [notAssigned, setNotAssigned] = useState(false);
   const [subject, setSubject] = useState(null);
   const [teacherName, setTeacherName] = useState('');
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState(() => {
+    const t = searchParams.get('tab');
+    return TABS.some((x) => x.key === t) ? t : 'overview';
+  });
 
   const [modules, setModules] = useState([]);
   const [activities, setActivities] = useState([]);
@@ -168,10 +172,15 @@ export default function TeacherSubjectPage() {
     }
   };
 
-  useEffect(() => {
+useEffect(() => {
     if (profile) fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id, subjectId]);
+
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (t && TABS.some((x) => x.key === t)) setTab(t);
+  }, [searchParams]);
 
   // --- Modules -------------------------------------------------------------
 

@@ -11,11 +11,11 @@ import {
 } from 'lucide-react';
 
 const QUICK_ACTIONS = [
-  { key: 'activity', label: 'Create Activity', icon: ClipboardList, to: '/roster' },
-  { key: 'module', label: 'Create Module', icon: FileText, to: '/materials' },
-  { key: 'announcement', label: 'Post Announcement', icon: Megaphone, to: '/announcements' },
-  { key: 'material', label: 'Upload Material', icon: Upload, to: '/materials' },
-  { key: 'class', label: 'Schedule Class', icon: CalendarPlus, to: '/classroom' },
+  { key: 'activity', label: 'Create Activity', icon: ClipboardList, tab: 'activities', to: '/teacher/subjects' },
+  { key: 'module', label: 'Create Module', icon: FileText, tab: 'modules', to: '/teacher/subjects' },
+  { key: 'announcement', label: 'Post Announcement', icon: Megaphone, tab: 'announcements', to: '/teacher/subjects' },
+  { key: 'material', label: 'Upload Material', icon: Upload, tab: 'materials', to: '/teacher/subjects' },
+  { key: 'class', label: 'Schedule Class', icon: CalendarPlus, to: '/classroom', live: true },
 ];
 
 export default function TeacherDashboard() {
@@ -137,7 +137,8 @@ export default function TeacherDashboard() {
     const action = pendingAction;
     setPickerOpen(false);
     setPendingAction(null);
-    navigate(action.to === '/classroom' ? '/classroom' : `${action.to}?subject=${subjectId}`);
+    if (action.live) navigate(`/classroom?subject=${subjectId}`);
+    else navigate(`/teacher/subjects/${subjectId}?tab=${action.tab}`);
   };
 
   const statCells = [
@@ -154,7 +155,7 @@ export default function TeacherDashboard() {
         subtitle="Here's what's happening with your BTLED ICT subjects."
         actions={
           <button
-            onClick={() => runQuickAction({ key: 'activity', label: 'Create Activity', icon: ClipboardList, to: '/roster' })}
+            onClick={() => runQuickAction(QUICK_ACTIONS.find((a) => a.key === 'activity'))}
             className="ws-btn-primary"
           >
             <Plus className="w-4 h-4" /> Quick Action
@@ -219,23 +220,38 @@ export default function TeacherDashboard() {
             ) : (
               <div className="divide-y divide-slate-100">
                 {subjects.map((s) => (
-                  <div key={s.id} className="px-4 py-3.5 flex items-center gap-3">
-                    <span className="text-[11px] font-semibold text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded shrink-0">
-                      {s.subject_code}
+                  <button
+                    key={s.id}
+                    onClick={() => navigate(`/teacher/subjects/${s.id}`)}
+                    className="w-full px-4 py-3 hover:bg-slate-50/60 transition-colors text-left flex items-start gap-3"
+                  >
+                    <span className="w-8 h-8 rounded-md bg-primary-50 text-primary-700 flex items-center justify-center text-[11px] font-bold flex-shrink-0 mt-0.5">
+                      {s.subject_code?.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'SUB'}
                     </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-semibold text-slate-800 truncate">{s.subject_title}</p>
-                      <p className="text-[11.5px] text-slate-400 truncate">
-                        {s.students} student{s.students === 1 ? '' : 's'} · {s.modules} module{s.modules === 1 ? '' : 's'} · {s.activities} activit{s.activities === 1 ? 'y' : 'ies'}
-                      </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[13px] font-semibold text-slate-800 truncate">{s.subject_title}</p>
+                        <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
+                      </div>
+                      <span className="mt-1 inline-block text-[11px] font-semibold text-primary-700 bg-primary-50 px-1.5 py-px rounded">
+                        {s.subject_code}
+                      </span>
+                      <div className="mt-2 grid grid-cols-3 gap-1.5">
+                        <div className="rounded-md bg-slate-50 border border-slate-100 py-1.5 text-center">
+                          <p className="text-[13px] font-bold text-slate-800 leading-tight">{s.students}</p>
+                          <p className="text-[9.5px] text-slate-400 leading-tight">Students</p>
+                        </div>
+                        <div className="rounded-md bg-slate-50 border border-slate-100 py-1.5 text-center">
+                          <p className="text-[13px] font-bold text-slate-800 leading-tight">{s.modules}</p>
+                          <p className="text-[9.5px] text-slate-400 leading-tight">Modules</p>
+                        </div>
+                        <div className="rounded-md bg-slate-50 border border-slate-100 py-1.5 text-center">
+                          <p className="text-[13px] font-bold text-slate-800 leading-tight">{s.activities}</p>
+                          <p className="text-[9.5px] text-slate-400 leading-tight">Activities</p>
+                        </div>
+                      </div>
                     </div>
-                    <button
-                      onClick={() => navigate(`/teacher/subjects/${s.id}`)}
-                      className="text-[12px] font-medium text-primary-600 hover:text-primary-700 whitespace-nowrap"
-                    >
-                      Open Subject
-                    </button>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -277,7 +293,7 @@ export default function TeacherDashboard() {
           <div className="relative w-full max-w-[420px] bg-white rounded-xl border border-slate-200 shadow-xl p-5">
             <h3 className="text-[15px] font-bold text-slate-900">Choose a subject</h3>
             <p className="text-[12px] text-slate-400 mt-0.5 mb-4">
-              {pendingAction?.label} will be linked to one of your assigned subjects.
+              {pendingAction?.label} will open inside the chosen subject.
             </p>
             <div className="space-y-1.5 max-h-72 overflow-y-auto">
               {subjects.map((s) => (
