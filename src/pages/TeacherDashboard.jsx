@@ -545,14 +545,20 @@ export default function TeacherDashboard() {
                           <div
                             key={i}
                             onClick={() => handleDayClick(day)}
-                            className={`flex flex-col items-center py-1.5 rounded-md ${hasEvents ? 'cursor-pointer' : ''} ${hasEvents ? resolveCellBg(dayEvents) : ''}`}
+                            className={`flex flex-col items-center py-1.5 rounded-md ${
+                              isToday
+                                ? 'bg-primary-600 text-white cursor-pointer'
+                                : hasEvents
+                                  ? 'cursor-pointer'
+                                  : ''
+                            } ${!isToday && hasEvents ? resolveCellBg(dayEvents) : ''}`}
                           >
                             {day ? (
                               <>
                                 <span
                                   className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[12px] font-semibold ${
                                     isToday
-                                      ? 'bg-primary-600 text-white'
+                                      ? 'text-white'
                                       : hasEvents
                                         ? 'text-slate-800'
                                         : 'text-slate-400'
@@ -563,7 +569,7 @@ export default function TeacherDashboard() {
                                 {hasEvents && (
                                   <div className="flex items-center gap-0.5 mt-0.5">
                                     {dayEvents.slice(0, 3).map((e) => (
-                                      <span key={e.id} className={`w-1.5 h-1.5 rounded-full ${eventDot(e)}`} />
+                                      <span key={e.id} className={`w-1.5 h-1.5 rounded-full ${isToday ? 'bg-white/80' : eventDot(e)}`} />
                                     ))}
                                   </div>
                                 )}
@@ -603,9 +609,9 @@ export default function TeacherDashboard() {
 
       {/* Date detail modal */}
       {showModal && selectedDate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div className="fixed inset-0 z-50">
           <div className="absolute inset-0 bg-slate-900/40" onClick={() => setShowModal(false)} />
-          <div className="relative w-full max-w-md bg-white rounded-xl border border-slate-200 shadow-2xl overflow-hidden">
+          <div className="absolute right-0 top-0 h-full w-full max-w-md bg-white border-l border-slate-200 shadow-2xl overflow-hidden flex flex-col">
             <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between">
               <div>
                 <p className="text-[10.5px] font-semibold uppercase tracking-wide text-primary-600">
@@ -625,7 +631,7 @@ export default function TeacherDashboard() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="divide-y divide-slate-50 max-h-80 overflow-y-auto">
+            <div className="divide-y divide-slate-50 overflow-y-auto">
               {selectedDate.events.map((e) => {
                 const c = EVENT_BADGE[e.type];
                 const startTime = e.start ? new Date(e.start) : null;
