@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
@@ -76,6 +76,17 @@ export default function TeacherDashboard() {
   const [events, setEvents] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [showModal, setShowModal] = useState(false);
+
+  const gridRef = useRef(null);
+  const containerRef = useRef(null);
+  const headersRef = useRef(null);
+  const cellsRef = useRef(null);
+  const dragRef = useRef({ id: null, sx: 0, sy: 0, moved: false });
+  const suppressClickRef = useRef(false);
+
+  const [zoom, setZoom] = useState(null); // { scale, x, y }
+  const [dragging, setDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     if (!profile) return;
@@ -257,6 +268,105 @@ export default function TeacherDashboard() {
     }
   };
 
+  useLayoutEffect(() => {
+    const measure = () => {
+      const container = containerRef.current;
+      const headers = headersRef.current;
+      const cells = cellsRef.current;
+      if (!container || !headers || !cells) return;
+
+      const first = firstDayOfWeek(calMonth);
+      const startOfToday = new Date(calMonth.getFullYear(), calMonth.getMonth(), now.getDate());
+      const featured = new Set([now.getDate()]);
+      events.forEach((e) => {
+        const d = new Date(e.deadline || e.start);
+        if (
+          d.getFullYear() === calMonth.getFullYear() &&
+          d.getMonth() === calMonth.getMonth() &&
+          d.getTime() >= startOfToday.getTime()
+        ) {
+          featured.add(d.getDate());
+        }
+      });
+
+      const pos = (day) => {
+        const idx = first + day - 1;
+        return { col: Math.max(0, idx % 7), row: Math.max(0, Math.floor(idx / 7)) };
+      };
+      const ps = [...featured].map(pos);
+      let minCol = Infinity, maxCol = -1, minRow = Infinity, maxRow = -1;
+      ps.forEach((p) => {
+        minCol = Math.min(minCol, p.col);
+        maxCol = Math.max(maxCol, p.col);
+        minRow = Math.min(minRow, p.row);
+        maxRow = Math.max(maxRow, p.row);
+      });
+      minCol = Math.max(0, minCol);
+      minRow = Math.max(0, minRow);
+
+      const vw = container.offsetWidth;
+      const vh = container.offsetHeight;
+      const cellW = cells.offsetWidth / 7;
+      const weeks = Math.max(1, calDays.length / 7);
+      const rowH = cells.offsetHeight / weeks;
+      const colSpan = Math.max(1, maxCol - minCol + 1);
+      const headerH = headers.offsetHeight;
+
+      const visibleCols = Math.min(5, Math.max(colSpan + 2, 3));
+      const scaleX = vw / (cellW * visibleCols);
+      const scaleY = vh / (headerH + (maxRow - minRow + 3) * rowH);
+      const scale = Math.min(2.2, Math.max(1.0, Math.min(scaleX, scaleY)));
+
+      const cx = ((minCol + maxCol) / 2 + 0.5) * cellW;
+      const cy = headerH + ((minRow + maxRow) / 2 + 0.5) * rowH;
+      setZoom({ scale, tx: vw / 2 - scale * cx, ty: vh / 2 - scale * cy });
+    };
+
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, calMonth, events]);
+
+  const onPointerDown = useCallback((e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    dragRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, moved: false };
+    suppressClickRef.current = false;
+    containerRef.current?.setPointerCapture?.(e.pointerId);
+    setDragging(true);
+  }, []);
+
+  const onPointerMove = useCallback((e) => {
+    const d = dragRef.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    const dx = e.clientX - d.startX;
+    const dy = e.clientY - d.startY;
+    if (Math.abs(dx) + Math.abs(dy) > 5) d.moved = true;
+    setDragOffset({ x: dx, y: dy });
+  }, []);
+
+  const onPointerEnd = useCallback((e) => {
+    const d = dragRef.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    if (d.moved) suppressClickRef.current = true;
+    containerRef.current?.releasePointerCapture?.(e.pointerId);
+    dragRef.current = null;
+    setDragging(false);
+    setDragOffset({ x: 0, y: 0 });
+  }, []);
+
+  const handleDayClick = (day) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    openDate(day);
+  };
+
+  const zoomTransform = zoom
+    ? `translate(${zoom.tx + dragOffset.x}px, ${zoom.ty + dragOffset.y}px) scale(${zoom.scale})`
+    : 'none';
+
   const statCells = [
     { label: 'My Subjects', value: stats.subjects, caption: 'Assigned subjects', icon: BookOpen, tone: 'bg-primary-50 text-primary-700' },
     { label: 'Active Activities', value: stats.activities, caption: 'Activities available to students', icon: ClipboardList, tone: 'bg-blue-50 text-blue-700' },
@@ -395,57 +505,83 @@ export default function TeacherDashboard() {
                   </p>
                 </div>
 
-                {/* Day headers */}
-                <div className="grid grid-cols-7 px-2">
-                  {DAY_LABELS.map((d) => (
-                    <div key={d} className="text-center text-[10px] font-semibold uppercase tracking-wide text-slate-400 py-1">
-                      {d}
+                {/* Zoomable calendar viewport */}
+                <div
+                  ref={containerRef}
+                  className="relative overflow-hidden px-2 select-none cursor-grab active:cursor-grabbing"
+                  style={{ touchAction: 'none' }}
+                  onPointerDown={onPointerDown}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={onPointerEnd}
+                  onPointerCancel={onPointerEnd}
+                >
+                  <div
+                    ref={gridRef}
+                    className="will-change-transform origin-top-left"
+                    style={{
+                      transform: zoomTransform,
+                      transition: dragging ? 'none' : 'transform 0.45s cubic-bezier(0.22, 1, 0.36, 1)',
+                    }}
+                  >
+                    {/* Day headers */}
+                    <div ref={headersRef} className="grid grid-cols-7">
+                      {DAY_LABELS.map((d) => (
+                        <div key={d} className="text-center text-[10px] font-semibold uppercase tracking-wide text-slate-400 py-1">
+                          {d}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
 
-                {/* Day cells */}
-                <div className="grid grid-cols-7 px-2 pb-3">
-                  {calDays.map((day, i) => {
-                    const date = day ? new Date(calMonth.getFullYear(), calMonth.getMonth(), day) : null;
-                    const dateKey = date ? toDateKey(date) : null;
-                    const isToday = date && toDateKey(date) === toDateKey(now);
-                    const dayEvents = dateKey ? eventsForDate(dateKey) : [];
-                    const hasEvents = dayEvents.length > 0;
+                    {/* Day cells */}
+                    <div ref={cellsRef} className="grid grid-cols-7 pb-3">
+                      {calDays.map((day, i) => {
+                        const date = day ? new Date(calMonth.getFullYear(), calMonth.getMonth(), day) : null;
+                        const dateKey = date ? toDateKey(date) : null;
+                        const isToday = date && toDateKey(date) === toDateKey(now);
+                        const dayEvents = dateKey ? eventsForDate(dateKey) : [];
+                        const hasEvents = dayEvents.length > 0;
 
-                    return (
-                      <div
-                        key={i}
-                        onClick={() => hasEvents && openDate(day)}
-                        className={`flex flex-col items-center py-1.5 rounded-md ${hasEvents ? 'cursor-pointer' : ''} ${hasEvents ? resolveCellBg(dayEvents) : ''}`}
-                      >
-                        {day ? (
-                          <>
-                            <span
-                              className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[12px] font-semibold ${
-                                isToday
-                                  ? 'bg-primary-600 text-white'
-                                  : hasEvents
-                                    ? 'text-slate-800'
-                                    : 'text-slate-400'
-                              }`}
-                            >
-                              {day}
-                            </span>
-                            {hasEvents && (
-                              <div className="flex items-center gap-0.5 mt-0.5">
-                                {dayEvents.slice(0, 3).map((e) => (
-                                  <span key={e.id} className={`w-1.5 h-1.5 rounded-full ${eventDot(e)}`} />
-                                ))}
-                              </div>
+                        return (
+                          <div
+                            key={i}
+                            onClick={() => handleDayClick(day)}
+                            className={`flex flex-col items-center py-1.5 rounded-md ${hasEvents ? 'cursor-pointer' : ''} ${hasEvents ? resolveCellBg(dayEvents) : ''}`}
+                          >
+                            {day ? (
+                              <>
+                                <span
+                                  className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[12px] font-semibold ${
+                                    isToday
+                                      ? 'bg-primary-600 text-white'
+                                      : hasEvents
+                                        ? 'text-slate-800'
+                                        : 'text-slate-400'
+                                  }`}
+                                >
+                                  {day}
+                                </span>
+                                {hasEvents && (
+                                  <div className="flex items-center gap-0.5 mt-0.5">
+                                    {dayEvents.slice(0, 3).map((e) => (
+                                      <span key={e.id} className={`w-1.5 h-1.5 rounded-full ${eventDot(e)}`} />
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <span className="w-7 h-7" />
                             )}
-                          </>
-                        ) : (
-                          <span className="w-7 h-7" />
-                        )}
-                      </div>
-                    );
-                  })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Edge fades */}
+                  <div className="pointer-events-none absolute inset-y-0 left-0 w-7 bg-gradient-to-r from-white to-transparent" />
+                  <div className="pointer-events-none absolute inset-y-0 right-0 w-7 bg-gradient-to-l from-white to-transparent" />
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-white to-transparent" />
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-white to-transparent" />
                 </div>
 
                 {/* Legend */}
