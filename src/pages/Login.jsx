@@ -1,39 +1,54 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Navigate, Link } from 'react-router-dom';
+import { Navigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { GraduationCap, User } from 'lucide-react';
+import { GraduationCap, User, ShieldCheck, X } from 'lucide-react';
 import AuthLayout from '../components/auth/AuthLayout';
 import AuthInput from '../components/auth/AuthInput';
 import AuthButton from '../components/auth/AuthButton';
+import { homePathFor } from '../utils/roles';
 
 export default function Login() {
-  const [role, setRole] = useState('student');
-  const [studentForm, setStudentForm] = useState({ email: '', password: '' });
+  const { signInAsTeacher, signInAsStudent, signInAsAdmin, user, profile, loading } = useAuth();
+  const location = useLocation();
+  const navigatedRole = location.state?.role;
+
+  const [role, setRole] = useState(() => {
+    if (navigatedRole) {
+      localStorage.setItem('bytebridge_role', navigatedRole);
+      return navigatedRole;
+    }
+    return localStorage.getItem('bytebridge_role') || 'student';
+  });
+  const [studentForm, setStudentForm] = useState({ studentId: '', birthdate: '' });
   const [teacherForm, setTeacherForm] = useState({ fullName: '', subjectCode: '' });
-  const [remember, setRemember] = useState(false);
-  const [showForgot, setShowForgot] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotSent, setForgotSent] = useState('');
   const [error, setError] = useState('');
   const [loadingLocal, setLoadingLocal] = useState(false);
 
-  const { signIn, signInAsTeacher, resetPassword, user, profile, loading } = useAuth();
-  const navigate = useNavigate();
+  // Hidden admin login (Ctrl + Alt + A). No visible hint on the page.
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [adminForm, setAdminForm] = useState({ email: '', password: '' });
+  const [adminError, setAdminError] = useState('');
+  const [adminLoading, setAdminLoading] = useState(false);
 
-  // Prefill remembered email
   useEffect(() => {
-    const saved = localStorage.getItem('bytebridge_email');
-    if (saved) {
-      setStudentForm(f => ({ ...f, email: saved }));
-      setRemember(true);
-    }
+    const onKeyDown = (e) => {
+      if (e.ctrlKey && e.altKey && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault();
+        setAdminOpen(true);
+        setAdminError('');
+      }
+      if (e.key === 'Escape') setAdminOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
   // Wait for auth to finish loading before redirecting automatically
   if (!loading) {
-    // Already logged in with a profile → go to dashboard
+    // Already logged in with a profile → go where they came from (or their role home)
     if (user && profile) {
-      return <Navigate to="/dashboard" replace />;
+      const from = location.state?.from;
+      return <Navigate to={from && from !== '/login' ? from : homePathFor(profile)} replace />;
     }
   }
 
@@ -43,28 +58,15 @@ export default function Login() {
     setLoadingLocal(true);
 
     try {
-      const { error: signInError } = await signIn(
-        studentForm.email,
-        studentForm.password
+      const { error: signInError } = await signInAsStudent(
+        studentForm.studentId,
+        studentForm.birthdate
       );
       if (signInError) throw signInError;
-
-      // Persist the remembered email
-      if (remember) {
-        localStorage.setItem('bytebridge_email', studentForm.email.trim());
-      } else {
-        localStorage.removeItem('bytebridge_email');
-      }
-
-      navigate('/dashboard');
+      // The login page auto-redirects to the role home once the session AND
+      // the profile are loaded, which prevents the white-screen flash.
     } catch (err) {
-      if (err.message?.includes('Invalid login credentials')) {
-        setError('Invalid email or password. Please try again.');
-      } else if (err.message?.includes('Email not confirmed')) {
-        setError('Email confirmation is disabled. Please log in again.');
-      } else {
-        setError(err.message || 'Login failed. Please try again.');
-      }
+      setError(err.message || 'Login failed. Please check your Student ID and birthday.');
     } finally {
       setLoadingLocal(false);
     }
@@ -81,218 +83,213 @@ export default function Login() {
         teacherForm.subjectCode
       );
       if (signInError) throw signInError;
-      navigate('/dashboard');
-    } catch (err) {
+    } catch {
       setError('Invalid teacher credentials. Please check your name and subject code.');
     } finally {
       setLoadingLocal(false);
     }
   };
 
-  const handleForgot = async (e) => {
+  const handleAdminSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setForgotSent('');
-    setLoadingLocal(true);
-
-    const email = forgotEmail.trim() || studentForm.email.trim();
-    if (!email) {
-      setError('Please enter your email address.');
-      setLoadingLocal(false);
-      return;
-    }
+    setAdminError('');
+    setAdminLoading(true);
 
     try {
-      const { error: forgotError } = await resetPassword(email);
-      if (forgotError) throw forgotError;
-      setForgotSent('Reset link sent! Please check your inbox.');
+      const { error: signInError } = await signInAsAdmin(adminForm.email, adminForm.password);
+      if (signInError) throw signInError;
+      setAdminOpen(false);
+      // Auto-redirects to /admin once the profile is loaded.
     } catch (err) {
-      setError(err.message || 'Failed to send the reset link. Please try again.');
+      setAdminError(err.message || 'Sign in failed. Please check your credentials.');
     } finally {
-      setLoadingLocal(false);
+      setAdminLoading(false);
     }
   };
 
   const switchRole = (nextRole) => {
     setRole(nextRole);
+    localStorage.setItem('bytebridge_role', nextRole);
     setError('');
-    setShowForgot(false);
-    setForgotSent('');
   };
 
   return (
     <AuthLayout>
-      {showForgot ? (
-        <div>
-          <h1 className="text-[28px] font-bold text-slate-900 tracking-tight">Reset your password</h1>
-          <p className="mt-2 text-sm text-slate-500">
-            Enter your email address and we'll send you a link to reset your password.
-          </p>
+      <>
+        {/* Branding */}
+        <h1 className="text-[26px] font-bold text-slate-900 tracking-tight">ByteBridge</h1>
+        <p className="mt-1 text-[13px] font-semibold text-primary-700">BTLED ICT Educational Portal</p>
+        <p className="mt-3 text-[13px] text-slate-500 leading-relaxed">
+          Learn, teach, collaborate, and keep track of your academic progress in one place.
+        </p>
 
-          <form className="mt-8 space-y-5" onSubmit={handleForgot}>
+        {/* Role selector */}
+        <div className="mt-7 mb-6 grid grid-cols-2 gap-1.5 p-1.5 bg-slate-100 rounded-xl">
+          <button
+            type="button"
+            onClick={() => switchRole('student')}
+            className={`h-11 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+              role === 'student'
+                ? 'bg-white text-primary-900 shadow-sm border border-slate-200'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <GraduationCap className="w-4 h-4" />
+            Student
+          </button>
+          <button
+            type="button"
+            onClick={() => switchRole('teacher')}
+            className={`h-11 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+              role === 'teacher'
+                ? 'bg-white text-primary-900 shadow-sm border border-slate-200'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <User className="w-4 h-4" />
+            Teacher
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-5 bg-red-50 border border-red-100 text-red-700 text-sm rounded-lg px-4 py-3">
+            {error}
+          </div>
+        )}
+
+        {role === 'student' ? (
+          <form className="space-y-5" onSubmit={handleStudentSubmit}>
+            <h2 className="text-lg font-bold text-slate-900">Student Access</h2>
+
             <AuthInput
-              label="Email Address"
-              type="email"
+              label="Student ID Number"
+              type="text"
               required
-              placeholder="student@email.com"
-              value={forgotEmail}
-              onChange={(e) => setForgotEmail(e.target.value)}
+              placeholder="Enter your student ID"
+              value={studentForm.studentId}
+              onChange={(e) => setStudentForm({ ...studentForm, studentId: e.target.value })}
             />
 
-            {forgotSent && (
-              <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-4 py-3">
-                {forgotSent}
-              </p>
-            )}
-            {error && (
-              <p className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-4 py-3">
-                {error}
-              </p>
-            )}
+            <AuthInput
+              label="Birthdate"
+              type="date"
+              required
+              value={studentForm.birthdate}
+              onChange={(e) => setStudentForm({ ...studentForm, birthdate: e.target.value })}
+            />
 
-            <AuthButton loading={loadingLocal} loadingText="Sending...">
-              Send Reset Link
+            <AuthButton loading={loadingLocal} loadingText="Signing In...">
+              Access Student Portal
             </AuthButton>
 
-            <button
-              type="button"
-              onClick={() => { setShowForgot(false); setError(''); setForgotSent(''); }}
-              className="w-full text-center text-sm font-medium text-slate-500 hover:text-primary-900 transition-colors"
-            >
-              Back to Sign In
-            </button>
+            <p className="text-[12.5px] text-slate-400">
+              Student access is available to enrolled BTLED ICT students.
+            </p>
+
+            <p className="text-center text-sm text-slate-500">
+              Don't have an account?{' '}
+              <Link
+                to="/register"
+                state={{ from: location.state?.from, role }}
+                className="font-semibold text-primary-900 hover:text-primary-700 transition-colors"
+              >
+                Create one
+              </Link>
+            </p>
           </form>
-        </div>
-      ) : (
-        <>
-          {/* Role selector */}
-          <div className="mb-8 grid grid-cols-2 gap-1.5 p-1.5 bg-slate-100 rounded-xl">
-            <button
-              type="button"
-              onClick={() => switchRole('student')}
-              className={`h-11 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                role === 'student'
-                  ? 'bg-white text-primary-900 shadow-sm border border-slate-200'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <GraduationCap className="w-4 h-4" />
-              Student
-            </button>
-            <button
-              type="button"
-              onClick={() => switchRole('teacher')}
-              className={`h-11 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                role === 'teacher'
-                  ? 'bg-white text-primary-900 shadow-sm border border-slate-200'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <User className="w-4 h-4" />
-              Teacher
-            </button>
-          </div>
+        ) : (
+          <form className="space-y-5" onSubmit={handleTeacherSubmit}>
+            <h2 className="text-lg font-bold text-slate-900">Teacher Access</h2>
 
-          <h1 className="text-[28px] font-bold text-slate-900 tracking-tight">Welcome Back</h1>
-          <p className="mt-2 text-sm text-slate-500">
-            {role === 'student' ? 'Sign in to your student account' : 'Sign in to your teacher account'}
-          </p>
+            <AuthInput
+              label="Teacher Name"
+              type="text"
+              required
+              placeholder="Enter your full name"
+              value={teacherForm.fullName}
+              onChange={(e) => setTeacherForm({ ...teacherForm, fullName: e.target.value })}
+            />
 
-          {error && (
-            <div className="mt-6 bg-red-50 border border-red-100 text-red-700 text-sm rounded-lg px-4 py-3">
-              {error}
-            </div>
-          )}
+            <AuthInput
+              label="Subject Code"
+              type="text"
+              required
+              placeholder="Enter your assigned subject code"
+              value={teacherForm.subjectCode}
+              onChange={(e) => setTeacherForm({ ...teacherForm, subjectCode: e.target.value })}
+            />
 
-          {role === 'student' ? (
-            <form className="mt-8 space-y-5" onSubmit={handleStudentSubmit}>
-              <AuthInput
-                label="Email Address"
-                type="email"
-                required
-                placeholder="student@email.com"
-                value={studentForm.email}
-                onChange={(e) => setStudentForm({ ...studentForm, email: e.target.value })}
-              />
+            <AuthButton loading={loadingLocal} loadingText="Signing In...">
+              Access Teacher Portal
+            </AuthButton>
 
-              <div>
+            <p className="text-[12.5px] text-slate-400">
+              Use the subject code assigned to you by the administrator.
+            </p>
+          </form>
+        )}
+
+        {/* Hidden Admin Login (Ctrl + Alt + A) */}
+        {adminOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <div
+              className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+              onClick={() => setAdminOpen(false)}
+            />
+            <div className="relative w-full max-w-[400px] bg-white rounded-xl border border-slate-200 shadow-2xl p-6">
+              <div className="flex items-start justify-between mb-5">
+                <div className="flex items-center gap-2.5">
+                  <span className="h-9 w-9 rounded-lg bg-primary-900 flex items-center justify-center">
+                    <ShieldCheck className="h-4.5 w-4.5 text-white" />
+                  </span>
+                  <div>
+                    <h3 className="text-[15px] font-bold text-slate-900 leading-tight">Administrator Access</h3>
+                    <p className="text-[11.5px] text-slate-400">Restricted area — authorized personnel only.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAdminOpen(false)}
+                  className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                  aria-label="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {adminError && (
+                <div className="mb-4 bg-red-50 border border-red-100 text-red-700 text-[13px] rounded-lg px-3.5 py-2.5">
+                  {adminError}
+                </div>
+              )}
+
+              <form className="space-y-4" onSubmit={handleAdminSubmit}>
+                <AuthInput
+                  label="Admin Email / Username"
+                  type="email"
+                  required
+                  autoComplete="username"
+                  placeholder="admin@bytebridge.edu"
+                  value={adminForm.email}
+                  onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })}
+                />
                 <AuthInput
                   label="Password"
                   type="password"
                   required
+                  autoComplete="current-password"
                   placeholder="Enter your password"
-                  value={studentForm.password}
-                  onChange={(e) => setStudentForm({ ...studentForm, password: e.target.value })}
+                  value={adminForm.password}
+                  onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })}
                 />
-                <div className="mt-3 flex items-center justify-between">
-                  <label className="flex items-center text-sm text-slate-600 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={remember}
-                      onChange={(e) => setRemember(e.target.checked)}
-                      className="rounded border-slate-300 text-primary-600 focus:ring-primary-500 w-4 h-4"
-                    />
-                    <span className="ml-2">Remember me</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => { setShowForgot(true); setError(''); }}
-                    className="text-sm font-medium text-primary-700 hover:text-primary-900 transition-colors"
-                  >
-                    Forgot Password?
-                  </button>
-                </div>
-              </div>
-
-              <AuthButton loading={loadingLocal} loadingText="Signing In...">
-                Sign In
-              </AuthButton>
-            </form>
-          ) : (
-            <form className="mt-8 space-y-5" onSubmit={handleTeacherSubmit}>
-              <AuthInput
-                label="Full Name"
-                type="text"
-                required
-                placeholder="e.g. John Smith"
-                value={teacherForm.fullName}
-                onChange={(e) => setTeacherForm({ ...teacherForm, fullName: e.target.value })}
-              />
-
-              <AuthInput
-                label="Subject Code"
-                type="text"
-                required
-                placeholder="e.g. ICT 101"
-                value={teacherForm.subjectCode}
-                onChange={(e) => setTeacherForm({ ...teacherForm, subjectCode: e.target.value })}
-              />
-
-              <AuthButton loading={loadingLocal} loadingText="Signing In...">
-                Sign In as Teacher
-              </AuthButton>
-            </form>
-          )}
-
-          <p className="mt-8 text-center text-sm text-slate-500">
-            {role === 'student' ? (
-              <>
-                Don't have an account?{' '}
-                <Link to="/register" className="font-semibold text-primary-900 hover:text-primary-700 transition-colors">
-                  Create one
-                </Link>
-              </>
-            ) : (
-              <>
-                Don't have an account?{' '}
-                <Link to="/register-teacher" className="font-semibold text-primary-900 hover:text-primary-700 transition-colors">
-                  Create one
-                </Link>
-              </>
-            )}
-          </p>
-        </>
-      )}
+                <AuthButton loading={adminLoading} loadingText="Signing In...">
+                  Sign In
+                </AuthButton>
+              </form>
+            </div>
+          </div>
+        )}
+      </>
     </AuthLayout>
   );
 }

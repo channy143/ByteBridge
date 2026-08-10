@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Navigate, Link } from 'react-router-dom';
+import { Navigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { AlertCircle } from 'lucide-react';
 import AuthLayout from '../components/auth/AuthLayout';
@@ -11,19 +11,20 @@ export default function RegisterTeacher() {
     fullName: '',
     subjectCode: '',
     email: '',
-    password: '',
-    confirmPassword: '',
   });
   const [errors, setErrors] = useState({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { user, signUp } = useAuth();
-  const navigate = useNavigate();
+  const { user, profile, loading: authLoading, signUp } = useAuth();
+  const location = useLocation();
+  const from = location.state?.from || '/dashboard';
+  const role = location.state?.role || 'teacher';
 
-  // Already logged in
-  if (user) {
-    return <Navigate to="/dashboard" replace />;
+  // Already logged in with a profile → go where they were headed.
+  // Waiting for the profile prevents a white-screen/login-page flash.
+  if (!authLoading && user && profile) {
+    return <Navigate to={from} replace />;
   }
 
   const handleChange = (e) => {
@@ -37,23 +38,21 @@ export default function RegisterTeacher() {
     setError('');
     setErrors({});
 
-    // Frontend validations
-    if (form.password !== form.confirmPassword) {
-      setErrors({ confirmPassword: 'Passwords do not match.' });
-      return;
-    }
-    if (form.password.length < 6) {
-      setErrors({ password: 'Password must be at least 6 characters long.' });
+    if (!form.subjectCode) {
+      setErrors({ subjectCode: 'Subject code is required.' });
       return;
     }
 
     setLoading(true);
 
     try {
+      // Use the subject code (lowercase, no spaces) as the password, consistent with teacher login
+      const password = form.subjectCode.trim().toLowerCase().replace(/\s+/g, '');
+
       // Create Supabase Auth account and save all metadata
       const { error: signUpError } = await signUp(
         form.email.trim(),
-        form.password,
+        password,
         {
           full_name: form.fullName.trim(),
           subject_code: form.subjectCode.trim(),
@@ -68,9 +67,10 @@ export default function RegisterTeacher() {
         throw new Error(signUpError.message || 'Failed to create account. Please try again.');
       }
 
-      // Success — account created, straight to the dashboard.
+      // Success — account created. No manual navigation here: the register
+      // page redirects once the session AND the auto-created profile are
+      // loaded, preventing a white-screen/login-page flash.
       // Confirmations are disabled, so no email step is needed.
-      navigate('/dashboard');
 
     } catch (err) {
       setError(err.message);
@@ -91,7 +91,7 @@ export default function RegisterTeacher() {
       <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Create Teacher Account</h1>
       <p className="mt-1 text-sm text-slate-500">Register your teacher account</p>
       <p className="mt-1.5 text-xs text-slate-400 leading-relaxed">
-        Create your account to start managing courses and activities on ByteBridge.
+        Create your account to start managing subjects and activities on ByteBridge.
       </p>
 
       {error && (
@@ -142,29 +142,10 @@ export default function RegisterTeacher() {
               onChange={handleChange}
               disabled={loading}
             />
-            <AuthInput
-              label="Password"
-              name="password"
-              type="password"
-              required
-              placeholder="Create a password"
-              value={form.password}
-              onChange={handleChange}
-              disabled={loading}
-              error={errors.password}
-            />
-            <AuthInput
-              label="Confirm Password"
-              name="confirmPassword"
-              type="password"
-              required
-              placeholder="Re-enter your password"
-              value={form.confirmPassword}
-              onChange={handleChange}
-              disabled={loading}
-              error={errors.confirmPassword}
-            />
           </div>
+          <p className="mt-3 text-xs text-slate-400">
+            You'll sign in using your Full Name and Subject Code (lowercase, no spaces) as the password — e.g. &quot;ICT 101&quot; becomes &quot;ict101&quot;.
+          </p>
         </div>
 
         <div className="mt-6">
@@ -175,7 +156,7 @@ export default function RegisterTeacher() {
 
         <p className="mt-5 text-center text-sm text-slate-500">
           Already have an account?{' '}
-          <Link to="/login" className="font-semibold text-primary-900 hover:text-primary-700 transition-colors">
+          <Link to="/login" state={{ from, role }} className="font-semibold text-primary-900 hover:text-primary-700 transition-colors">
             Sign In
           </Link>
         </p>

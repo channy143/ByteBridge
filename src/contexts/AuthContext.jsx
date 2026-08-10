@@ -16,6 +16,9 @@ export function AuthProvider({ children }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user) {
+        // Keep the app in the loading state until the profile is fetched,
+        // otherwise ProtectedRoute would bounce to /login mid-login.
+        setLoading(true);
         fetchProfile(session.user.id, session.user);
       } else {
         setLoading(false);
@@ -27,6 +30,9 @@ export function AuthProvider({ children }) {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       if (currentUser) {
+        // Same as above: hold the loading state while the profile loads
+        // so the login → dashboard transition never flashes the login page.
+        setLoading(true);
         fetchProfile(currentUser.id, currentUser);
       } else {
         setProfile(null);
@@ -134,12 +140,58 @@ export function AuthProvider({ children }) {
     return { data, error };
   };
 
-  // Teacher sign in (keeping existing synthetic email approach)
+  // Teacher sign in via full name + subject code
   const signInAsTeacher = async (name, subjectCode) => {
-    const cleanName = name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-    const email = `${cleanName}@teacher.bytebridge.local`;
+    // 1. RPC verifies identity, resets password to the subject code, returns the auth email
+    const { data, error: rpcError } = await supabase.rpc('login_teacher', {
+      p_full_name: name,
+      p_subject_code: subjectCode,
+    });
+
+    if (rpcError) throw rpcError;
+    if (!data?.success) throw new Error(data?.error || 'Login failed.');
+
+    // 2. Sign in with the email + subject code (lowercase, no spaces) as password
     const password = subjectCode.trim().toLowerCase().replace(/\s+/g, '');
-    return await signIn(email, password);
+    return await signIn(data.email, password);
+  };
+
+  // Student sign in via student ID + birthday
+  const signInAsStudent = async (studentId, birthdate) => {
+    // 1. RPC verifies identity, resets password to birthdate, returns the auth email
+    const { data, error: rpcError } = await supabase.rpc('login_student', {
+      p_student_id: studentId.trim(),
+      p_birthdate: birthdate,
+    });
+
+    if (rpcError) throw rpcError;
+    if (!data?.success) throw new Error(data?.error || 'Login failed.');
+
+    // 2. Sign in with the email + birthdate as password
+    return await signIn(data.email, birthdate);
+  };
+
+  // Admin sign in via real email/password credentials
+  const signInAsAdmin = async (email, password) => {
+    const { data, error } = await signIn(email.trim(), password);
+    if (error) return { data, error };
+
+    const { data: adminProfile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('auth_user_id', data.user.id)
+      .maybeSingle();
+
+    if (profileError || !adminProfile || adminProfile.role !== 'admin') {
+      await supabase.auth.signOut();
+      setProfile(null);
+      return {
+        data: null,
+        error: { message: 'Access denied. This account does not have administrator privileges.' },
+      };
+    }
+
+    return { data, error: null };
   };
 
   const signOut = async () => {
@@ -158,7 +210,10 @@ export function AuthProvider({ children }) {
       signUp,
       signOut,
       signInAsTeacher,
+      signInAsStudent,
+      signInAsAdmin,
       resetPassword,
+      refreshProfile: () => user ? fetchProfile(user.id, user) : Promise.resolve(),
     }}>
       {!loading && children}
     </AuthContext.Provider>

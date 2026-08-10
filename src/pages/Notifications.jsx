@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
-import Navbar from '../components/layout/Navbar';
-import { Bell, Check, CheckCheck, Megaphone, FileText, BookOpen, Video, Star, Loader2 } from 'lucide-react';
+import PageHeader from '../components/ui/PageHeader';
+import EmptyState from '../components/ui/EmptyState';
+import { Skeleton, SkeletonCircle } from '../components/ui/Skeleton';
+import { Bell, CheckCheck, Megaphone, FileText, BookOpen, Video, Star } from 'lucide-react';
 
 export default function Notifications() {
   const { profile } = useAuth();
@@ -12,8 +14,7 @@ export default function Notifications() {
   useEffect(() => {
     if (profile) {
       fetchNotifications();
-      
-      // Subscribe to realtime notifications
+
       const channel = supabase
         .channel('notifications')
         .on('postgres_changes', {
@@ -108,82 +109,79 @@ export default function Notifications() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Navbar />
+    <div>
+      <PageHeader
+        title="Notifications"
+        subtitle="Stay updated on your subjects and activities."
+        action={unreadCount > 0 ? (
+          <button onClick={markAllAsRead} className="flex items-center text-[13px] font-medium text-primary-600 hover:text-primary-700 transition-colors">
+            <CheckCheck className="w-4 h-4 mr-1.5" />
+            Mark all read
+          </button>
+        ) : null}
+      />
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 flex items-center">
-              <Bell className="w-6 h-6 mr-2 text-primary-600" />
-              Notifications
-              {unreadCount > 0 && (
-                <span className="ml-3 px-2.5 py-0.5 rounded-full bg-red-500 text-white text-xs font-bold">
-                  {unreadCount}
+      {loading ? (
+        <div className="ws-card overflow-hidden divide-y divide-slate-100">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-start px-5 py-4">
+              <SkeletonCircle size={36} className="mt-0.5" />
+              <div className="ml-3.5 flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-3">
+                  <Skeleton className="h-3.5 w-1/2 rounded" />
+                  <Skeleton className="h-3 w-14 rounded" />
+                </div>
+                <Skeleton className="h-3 w-full rounded mt-2" />
+                <Skeleton className="h-3 w-3/4 rounded mt-1.5" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : notifications.length === 0 ? (
+        <div className="ws-card">
+          <EmptyState
+            icon={<Bell className="w-7 h-7" />}
+            title="All caught up!"
+            description="You have no notifications right now."
+          />
+        </div>
+      ) : (
+        <div className="ws-card overflow-hidden divide-y divide-slate-100">
+          {notifications.map((notification) => (
+            <div
+              key={notification.id}
+              className={`flex items-start px-5 py-4 transition-colors cursor-pointer ${
+                notification.is_read
+                  ? 'bg-white hover:bg-slate-50/60'
+                  : 'bg-primary-50/40 hover:bg-primary-50'
+              }`}
+              onClick={() => !notification.is_read && markAsRead(notification.id)}
+            >
+              <span className="flex-shrink-0 mt-0.5 w-9 h-9 rounded-lg bg-white border border-slate-100 flex items-center justify-center shadow-sm">
+                {getNotificationIcon(notification.title)}
+              </span>
+              <div className="ml-3.5 flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-3">
+                  <h4 className={`text-[13.5px] font-medium truncate ${notification.is_read ? 'text-slate-700' : 'text-slate-900'}`}>
+                    {notification.title}
+                  </h4>
+                  <span className="text-[11.5px] text-slate-400 flex-shrink-0 whitespace-nowrap">
+                    {formatTime(notification.created_at)}
+                  </span>
+                </div>
+                <p className={`text-[12.5px] mt-0.5 ${notification.is_read ? 'text-slate-500' : 'text-slate-600'}`}>
+                  {notification.message}
+                </p>
+              </div>
+              {!notification.is_read && (
+                <span className="ml-3 flex-shrink-0 mt-2">
+                  <span className="block w-2 h-2 rounded-full bg-primary-500"></span>
                 </span>
               )}
-            </h1>
-            <p className="text-slate-600 text-sm mt-1">Stay updated on your courses and activities.</p>
-          </div>
-          {unreadCount > 0 && (
-            <button
-              onClick={markAllAsRead}
-              className="flex items-center text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors"
-            >
-              <CheckCheck className="w-4 h-4 mr-1.5" />
-              Mark all read
-            </button>
-          )}
+            </div>
+          ))}
         </div>
-
-        {loading ? (
-          <div className="text-center py-12">
-            <Loader2 className="h-8 w-8 text-primary-600 animate-spin mx-auto" />
-          </div>
-        ) : notifications.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
-            <Bell className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900">All Caught Up!</h3>
-            <p className="text-slate-500 mt-1">You have no notifications right now.</p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden divide-y divide-slate-100">
-            {notifications.map((notification) => (
-              <div
-                key={notification.id}
-                className={`flex items-start p-4 transition-colors cursor-pointer ${
-                  notification.is_read 
-                    ? 'bg-white hover:bg-slate-50' 
-                    : 'bg-primary-50/50 hover:bg-primary-50'
-                }`}
-                onClick={() => !notification.is_read && markAsRead(notification.id)}
-              >
-                <div className="flex-shrink-0 mt-0.5">
-                  {getNotificationIcon(notification.title)}
-                </div>
-                <div className="ml-4 flex-1 min-w-0">
-                  <div className="flex items-start justify-between">
-                    <h4 className={`text-sm font-medium ${notification.is_read ? 'text-slate-700' : 'text-slate-900'}`}>
-                      {notification.title}
-                    </h4>
-                    <span className="text-xs text-slate-400 ml-4 flex-shrink-0 whitespace-nowrap">
-                      {formatTime(notification.created_at)}
-                    </span>
-                  </div>
-                  <p className={`text-sm mt-0.5 ${notification.is_read ? 'text-slate-500' : 'text-slate-600'}`}>
-                    {notification.message}
-                  </p>
-                </div>
-                {!notification.is_read && (
-                  <div className="ml-3 flex-shrink-0 mt-2">
-                    <div className="w-2.5 h-2.5 rounded-full bg-primary-500"></div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </main>
+      )}
     </div>
   );
 }

@@ -10,7 +10,7 @@ const navLinks = [
   { to: '/announcements', label: 'Announcements' },
   { to: '/roster', label: 'Roster & Dockets' },
   { to: '/materials', label: 'Materials' },
-  { to: '/classroom', label: 'Classroom' },
+  { to: '/classroom', label: 'Virtual Classroom' },
 ];
 
 export default function Navbar() {
