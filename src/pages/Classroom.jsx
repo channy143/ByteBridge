@@ -211,8 +211,20 @@ export default function Classroom() {
           .from('class_schedules')
           .select('*, subjects (subject_code, subject_title), teacher:created_by (full_name)')
           .order('starts_at', { ascending: true }),
-        isTeacher
-          ? supabase.from('subjects').select('id, subject_code, subject_title').order('subject_code')
+isTeacher
+          ? (async () => {
+              const { data: ts } = await supabase
+                .from('teacher_subjects')
+                .select('subject_id')
+                .eq('teacher_id', profile.id);
+              const ids = (ts || []).map((t) => t.subject_id);
+              if (!ids.length) return { data: [], error: null };
+              return supabase
+                .from('subjects')
+                .select('id, subject_code, subject_title')
+                .in('id', ids)
+                .order('subject_code');
+            })()
           : Promise.resolve({ data: [], error: null }),
       ]);
 

@@ -177,11 +177,23 @@ export default function Materials() {
       setTeacherAssignments(
         Object.fromEntries((tsRes.data || []).map((t) => [t.subject_id, teacherInfo[t.teacher_id] || null]))
       );
-      setSubjects(subjRes.data || []);
+let visibleSubjects = subjRes.data || [];
+      if (isTeacher) {
+        const mine = new Set((tsRes.data || []).map((t) => t.subject_id));
+        visibleSubjects = visibleSubjects.filter((s) => mine.has(s.id));
+      } else if (profile?.id) {
+        const { data: enr } = await supabase
+          .from('enrollments')
+          .select('subject_id')
+          .eq('student_id', profile.id);
+        const mine = new Set((enr || []).map((e) => e.subject_id));
+        visibleSubjects = visibleSubjects.filter((s) => mine.has(s.id));
+      }
+      setSubjects(visibleSubjects);
       setModules(modRes.data || []);
 
       const target = searchParams.get('subject');
-      if (target && (subjRes.data || []).some((s) => s.id === target)) {
+      if (target && visibleSubjects.some((s) => s.id === target)) {
         setSelectedId(target);
       }
     } catch (err) {

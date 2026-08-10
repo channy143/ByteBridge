@@ -56,26 +56,15 @@ export function AuthProvider({ children }) {
         if (error.code === 'PGRST116' && sessionUser?.user_metadata) {
           const meta = sessionUser.user_metadata;
 
-          if (meta.role === 'teacher' && meta.full_name) {
-            console.log('Profile missing, auto-creating teacher profile using RPC...');
-            const { error: rpcError } = await supabase.rpc('register_new_teacher', {
-              p_auth_id: userId,
-              p_full_name: meta.full_name,
-              p_subject_code: meta.subject_code || 'ICT 101',
-              p_email: sessionUser.email
-            });
+          // Teacher accounts are provisioned by the administrator
+          // (admin_create_teacher); there is no teacher self-registration.
+          if (meta.role === 'teacher') {
+            console.error('Teacher profile is missing. Teacher accounts must be created by the administrator.');
+            setProfile(null);
+            return;
+          }
 
-            if (!rpcError) {
-              const { data: newProfile } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', userId)
-                .single();
-              setProfile(newProfile);
-              return;
-            }
-            console.error('Failed to auto-create teacher profile:', rpcError);
-          } else if (meta.student_id) {
+          if (meta.student_id) {
             console.log('Profile missing, auto-creating from metadata using RPC...');
             const { error: rpcError } = await supabase.rpc('register_new_student', {
               p_auth_id: userId,

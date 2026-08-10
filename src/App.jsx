@@ -2,7 +2,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import RegisterTeacher from './pages/RegisterTeacher';
 import Dashboard from './pages/Dashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 import TeacherSubjects from './pages/TeacherSubjects';
@@ -31,7 +30,6 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/register-teacher" element={<RegisterTeacher />} />
 
           {/* Authenticated workspace */}
           <Route

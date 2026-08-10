@@ -492,8 +492,12 @@ export default function RosterAndDockets() {
                 </div>
                 <div>
                   <label className="block text-[12px] font-medium text-slate-600 mb-1">Subject</label>
-                  <select value={form.subject_id} onChange={(e) => setForm({ ...form, subject_id: e.target.value })} className="ws-input w-full">
-                    <option value="">Global</option>
+<select value={form.subject_id} onChange={(e) => setForm({ ...form, subject_id: e.target.value })} className="ws-input w-full">
+                    {!isTeacher ? (
+                      <option value="">Global</option>
+                    ) : form.subject_id === '' ? (
+                      <option value="" disabled>Global (admin managed)</option>
+                    ) : null}
                     {assignedSubjects.map((s) => (
                       <option key={s.id} value={s.id}>{s.code} — {s.title}</option>
                     ))}
@@ -502,7 +506,7 @@ export default function RosterAndDockets() {
               </div>
               <div className="flex justify-end gap-2 pt-1">
                 <button type="button" onClick={() => setShowCreate(false)} className="ws-btn-secondary">Cancel</button>
-                <button type="submit" disabled={creating} className="ws-btn-primary">
+                <button type="submit" disabled={creating || (isTeacher && !form.subject_id)} className="ws-btn-primary">
                   {creating ? 'Creating…' : (<><Plus className="w-4 h-4" /> Create Activity</>)}
                 </button>
               </div>

@@ -47,7 +47,7 @@ const formatFullDate = (iso) => {
   return `${date} · ${time}`;
 };
 
-function NewAnnouncementModal({ open, onClose, subjects, onSubmit }) {
+function NewAnnouncementModal({ open, onClose, subjects, onSubmit, includeGlobal }) {
   const [title, setTitle] = useState('');
   const [subjectId, setSubjectId] = useState('');
   const [type, setType] = useState('General');
@@ -56,21 +56,22 @@ function NewAnnouncementModal({ open, onClose, subjects, onSubmit }) {
   const [attachments, setAttachments] = useState([{ name: '', url: '' }]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
+useEffect(() => {
     if (open) {
       setTitle('');
-      setSubjectId('');
+      setSubjectId(includeGlobal ? '' : (subjects[0]?.id || ''));
       setType('General');
       setUrgent(false);
       setContent('');
       setAttachments([{ name: '', url: '' }]);
     }
-  }, [open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, includeGlobal]);
 
   if (!open) return null;
 
-  const validAttachments = attachments.filter((a) => a.name.trim() && a.url.trim());
-  const canSubmit = title.trim() && content.trim();
+const validAttachments = attachments.filter((a) => a.name.trim() && a.url.trim());
+  const canSubmit = !!title.trim() && !!content.trim() && (includeGlobal || !!subjectId);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -116,8 +117,8 @@ function NewAnnouncementModal({ open, onClose, subjects, onSubmit }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="ws-label block mb-1">Subject</label>
-              <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} className="ws-input w-full">
-                <option value="">Global (All subjects)</option>
+<select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} className="ws-input w-full">
+                {includeGlobal && <option value="">Global (All subjects)</option>}
                 {subjects.map((s) => (
                   <option key={s.id} value={s.id}>{s.subject_code}</option>
                 ))}
@@ -243,10 +244,10 @@ export default function Announcements() {
   const [selected, setSelected] = useState(null);
   const [composerOpen, setComposerOpen] = useState(false);
 
-  useEffect(() => {
+useEffect(() => {
     fetchAnnouncements();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [profile?.id]);
 
   useEffect(() => {
     if (!profile) return;
@@ -264,15 +265,32 @@ export default function Announcements() {
     return () => { cancelled = true; };
   }, [profile]);
 
-  const fetchAnnouncements = async () => {
+const fetchAnnouncements = async () => {
     try {
+      // Teachers may only post to subjects assigned to them; the select
+      // options (and the feed scope) follow that.
+      const subjectsPromise = profile?.role === 'teacher'
+        ? (async () => {
+            const { data: ts } = await supabase
+              .from('teacher_subjects')
+              .select('subject_id')
+              .eq('teacher_id', profile.id);
+            const ids = (ts || []).map((t) => t.subject_id);
+            if (!ids.length) return { data: [], error: null };
+            return supabase
+              .from('subjects')
+              .select('id, subject_code, subject_title')
+              .in('id', ids);
+          })()
+        : supabase.from('subjects').select('id, subject_code, subject_title');
+
       const [annRes, subjRes] = await Promise.all([
         supabase
           .from('announcements')
           .select('*, profiles:created_by (full_name, role)')
           .order('is_pinned', { ascending: false })
           .order('created_at', { ascending: false }),
-        supabase.from('subjects').select('id, subject_code, subject_title'),
+        subjectsPromise,
       ]);
       if (annRes.error) throw annRes.error;
       if (!subjRes.error) setSubjects(subjRes.data || []);
@@ -377,12 +395,14 @@ export default function Announcements() {
             ? 'Share updates and important information with your students.'
             : 'Updates and important information from your instructors and subjects.'
         }
-        actions={
+actions={
           profile?.role === 'teacher' ? (
-            <button onClick={() => setComposerOpen(true)} className="ws-btn-primary">
-              <Plus className="w-4 h-4" />
-              New Announcement
-            </button>
+            subjects.length > 0 ? (
+              <button onClick={() => setComposerOpen(true)} className="ws-btn-primary">
+                <Plus className="w-4 h-4" />
+                New Announcement
+              </button>
+            ) : undefined
           ) : undefined
         }
       />
@@ -566,10 +586,11 @@ export default function Announcements() {
         )}
       </Drawer>
 
-      <NewAnnouncementModal
+<NewAnnouncementModal
         open={composerOpen}
         onClose={() => setComposerOpen(false)}
         subjects={subjects}
+        includeGlobal={profile?.role === 'admin'}
         onSubmit={handlePostAnnouncement}
       />
     </div>
