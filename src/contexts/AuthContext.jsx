@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '../services/supabase';
 
 const AuthContext = createContext();
@@ -7,6 +7,12 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // Once the app has booted (session + profile resolved), auth background
+  // events -- token refresh when a tab regains focus, session sync across
+  // tabs, USER_UPDATED, etc. -- must never flip `loading` back to true.
+  // Doing so unmounts/remounts the whole app and looks like a page refresh.
+  const bootedRef = useRef(false);
 
   // Derived state: email confirmation is disabled, so accounts are created activated.
   const emailConfirmed = !!user?.email_confirmed_at;
@@ -22,6 +28,7 @@ export function AuthProvider({ children }) {
         fetchProfile(session.user.id, session.user);
       } else {
         setLoading(false);
+        bootedRef.current = true;
       }
     });
 
@@ -31,13 +38,18 @@ export function AuthProvider({ children }) {
 
       if (currentUser) {
         setUser(currentUser);
-        // Only hold the loading state / reload the profile when the user actually
-        // signs in or a session is first established. Token refreshes (which fire
-        // when a tab regains focus) must NOT remount the app.
-        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        if (!bootedRef.current) {
+          // Initial boot (or a sign-in racing it): hold the loading state until
+          // the profile is fetched so the login page never flashes mid-login.
           setLoading(true);
           fetchProfile(currentUser.id, currentUser);
+        } else if (event === 'SIGNED_IN') {
+          // A real sign-in while already booted: reload the profile in the
+          // background without flashing the loading screen.
+          fetchProfile(currentUser.id, currentUser);
         }
+        // TOKEN_REFRESHED / USER_UPDATED / INITIAL_SESSION while booted:
+        // the user is already synced above; nothing that remounts the app.
       } else {
         setUser(null);
         setProfile(null);
@@ -55,7 +67,7 @@ export function AuthProvider({ children }) {
         .select('*')
         .eq('auth_user_id', userId)
         .single();
-        
+
       if (error) {
         // PGRST116 means no rows returned (profile doesn't exist yet)
         if (error.code === 'PGRST116' && sessionUser?.user_metadata) {
@@ -102,6 +114,7 @@ export function AuthProvider({ children }) {
       setProfile(null);
     } finally {
       setLoading(false);
+      bootedRef.current = true;
     }
   };
 
