@@ -416,13 +416,24 @@ export default function TeacherDashboard() {
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto">
             {loading ? (
-              <div className="p-4 space-y-3">
-                {Array.from({ length: 2 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <Skeleton className="h-5 w-14 rounded flex-shrink-0" />
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-3 w-1/2 rounded" />
-                      <Skeleton className="h-2.5 w-1/3 rounded" />
+              <div className="divide-y divide-slate-100">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="px-4 py-3 flex items-start gap-3">
+                    <Skeleton className="w-8 h-8 rounded-md flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <Skeleton className="h-3 w-2/3 rounded" />
+                        <Skeleton className="h-4 w-4 rounded flex-shrink-0" />
+                      </div>
+                      <Skeleton className="h-3.5 w-14 rounded mt-1.5" />
+                      <div className="mt-2 grid grid-cols-3 gap-1.5">
+                        {Array.from({ length: 3 }).map((__, j) => (
+                          <div key={j} className="rounded-md bg-slate-50 border border-slate-100 py-1.5 text-center space-y-1">
+                            <Skeleton className="h-3 w-8 rounded mx-auto" />
+                            <Skeleton className="h-2 w-12 rounded mx-auto" />
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 ))}
