@@ -167,6 +167,7 @@ DROP POLICY IF EXISTS "Teachers can create modules" ON public.modules;
 DROP POLICY IF EXISTS "Teachers can update own modules" ON public.modules;
 DROP POLICY IF EXISTS "Teachers can delete own modules" ON public.modules;
 
+DROP POLICY IF EXISTS "Modules visible by scope" ON public.modules;
 CREATE POLICY "Modules visible by scope"
   ON public.modules FOR SELECT
   USING (
@@ -177,14 +178,17 @@ CREATE POLICY "Modules visible by scope"
         AND modules.is_published = TRUE)
   );
 
+DROP POLICY IF EXISTS "Modules inserted by assigned teachers or admins" ON public.modules;
 CREATE POLICY "Modules inserted by assigned teachers or admins"
   ON public.modules FOR INSERT
   WITH CHECK (public.current_user_is_admin() OR public.teacher_can_manage_subject(modules.subject_id));
 
+DROP POLICY IF EXISTS "Modules updated by assigned teachers or admins" ON public.modules;
 CREATE POLICY "Modules updated by assigned teachers or admins"
   ON public.modules FOR UPDATE
   USING (public.current_user_is_admin() OR public.teacher_can_manage_subject(modules.subject_id));
 
+DROP POLICY IF EXISTS "Modules deleted by assigned teachers or admins" ON public.modules;
 CREATE POLICY "Modules deleted by assigned teachers or admins"
   ON public.modules FOR DELETE
   USING (public.current_user_is_admin() OR public.teacher_can_manage_subject(modules.subject_id));
@@ -199,6 +203,7 @@ DROP POLICY IF EXISTS "Teachers can create materials" ON public.course_materials
 DROP POLICY IF EXISTS "Teachers can update materials" ON public.course_materials;
 DROP POLICY IF EXISTS "Teachers can delete materials" ON public.course_materials;
 
+DROP POLICY IF EXISTS "Materials visible by scope" ON public.course_materials;
 CREATE POLICY "Materials visible by scope"
   ON public.course_materials FOR SELECT
   USING (
@@ -217,6 +222,7 @@ CREATE POLICY "Materials visible by scope"
     )
   );
 
+DROP POLICY IF EXISTS "Materials inserted by assigned teachers or admins" ON public.course_materials;
 CREATE POLICY "Materials inserted by assigned teachers or admins"
   ON public.course_materials FOR INSERT
   WITH CHECK (
@@ -228,6 +234,7 @@ CREATE POLICY "Materials inserted by assigned teachers or admins"
     )
   );
 
+DROP POLICY IF EXISTS "Materials updated by assigned teachers or admins" ON public.course_materials;
 CREATE POLICY "Materials updated by assigned teachers or admins"
   ON public.course_materials FOR UPDATE
   USING (
@@ -239,6 +246,7 @@ CREATE POLICY "Materials updated by assigned teachers or admins"
     )
   );
 
+DROP POLICY IF EXISTS "Materials deleted by assigned teachers or admins" ON public.course_materials;
 CREATE POLICY "Materials deleted by assigned teachers or admins"
   ON public.course_materials FOR DELETE
   USING (
@@ -262,6 +270,7 @@ DROP POLICY IF EXISTS "Teachers can update their activities" ON public.activitie
 DROP POLICY IF EXISTS "Teachers can delete their activities" ON public.activities;
 DROP POLICY IF EXISTS "Teachers can manage own global activities" ON public.activities;
 
+DROP POLICY IF EXISTS "Activities visible by scope" ON public.activities;
 CREATE POLICY "Activities visible by scope"
   ON public.activities FOR SELECT
   USING (
@@ -271,6 +280,7 @@ CREATE POLICY "Activities visible by scope"
     OR (public.current_user_is_student() AND public.student_enrolled(activities.subject_id))
   );
 
+DROP POLICY IF EXISTS "Activities inserted by assigned teachers or admins" ON public.activities;
 CREATE POLICY "Activities inserted by assigned teachers or admins"
   ON public.activities FOR INSERT
   WITH CHECK (
@@ -280,6 +290,7 @@ CREATE POLICY "Activities inserted by assigned teachers or admins"
         AND public.teacher_can_manage_subject(activities.subject_id))
   );
 
+DROP POLICY IF EXISTS "Activities updated by assigned teachers or admins" ON public.activities;
 CREATE POLICY "Activities updated by assigned teachers or admins"
   ON public.activities FOR UPDATE
   USING (
@@ -287,6 +298,7 @@ CREATE POLICY "Activities updated by assigned teachers or admins"
     OR (activities.subject_id IS NOT NULL AND public.teacher_can_manage_subject(activities.subject_id))
   );
 
+DROP POLICY IF EXISTS "Activities deleted by assigned teachers or admins" ON public.activities;
 CREATE POLICY "Activities deleted by assigned teachers or admins"
   ON public.activities FOR DELETE
   USING (
@@ -305,6 +317,7 @@ DROP POLICY IF EXISTS "Teachers can post announcements" ON public.announcements;
 DROP POLICY IF EXISTS "Teachers can update own announcements" ON public.announcements;
 DROP POLICY IF EXISTS "Teachers can delete own announcements" ON public.announcements;
 
+DROP POLICY IF EXISTS "Announcements visible by scope" ON public.announcements;
 CREATE POLICY "Announcements visible by scope"
   ON public.announcements FOR SELECT
   USING (
@@ -314,6 +327,7 @@ CREATE POLICY "Announcements visible by scope"
     OR (public.current_user_is_student() AND public.student_enrolled(announcements.subject_id))
   );
 
+DROP POLICY IF EXISTS "Announcements inserted by admins or assigned teachers" ON public.announcements;
 CREATE POLICY "Announcements inserted by admins or assigned teachers"
   ON public.announcements FOR INSERT
   WITH CHECK (
@@ -326,6 +340,7 @@ CREATE POLICY "Announcements inserted by admins or assigned teachers"
     )
   );
 
+DROP POLICY IF EXISTS "Announcements updated by admins or owner teacher" ON public.announcements;
 CREATE POLICY "Announcements updated by admins or owner teacher"
   ON public.announcements FOR UPDATE
   USING (
@@ -335,6 +350,7 @@ CREATE POLICY "Announcements updated by admins or owner teacher"
         AND public.teacher_can_manage_subject(announcements.subject_id))
   );
 
+DROP POLICY IF EXISTS "Announcements deleted by admins or owner teacher" ON public.announcements;
 CREATE POLICY "Announcements deleted by admins or owner teacher"
   ON public.announcements FOR DELETE
   USING (
@@ -347,6 +363,7 @@ CREATE POLICY "Announcements deleted by admins or owner teacher"
 -- Announcement attachments: only the posting teacher (within an assigned
 -- subject) or an admin can manage files.
 DROP POLICY IF EXISTS "Teachers can manage attachments" ON public.announcement_attachments;
+DROP POLICY IF EXISTS "Attachments managed by owner teacher or admin" ON public.announcement_attachments;
 CREATE POLICY "Attachments managed by owner teacher or admin"
   ON public.announcement_attachments FOR ALL
   USING (
@@ -371,6 +388,7 @@ DROP POLICY IF EXISTS "Teachers can create schedules" ON public.class_schedules;
 DROP POLICY IF EXISTS "Teachers can update own schedules" ON public.class_schedules;
 DROP POLICY IF EXISTS "Teachers can delete own schedules" ON public.class_schedules;
 
+DROP POLICY IF EXISTS "Schedules inserted by assigned teachers or admins" ON public.class_schedules;
 CREATE POLICY "Schedules inserted by assigned teachers or admins"
   ON public.class_schedules FOR INSERT
   WITH CHECK (
@@ -383,6 +401,7 @@ CREATE POLICY "Schedules inserted by assigned teachers or admins"
     )
   );
 
+DROP POLICY IF EXISTS "Schedules updated by owner teachers or admins" ON public.class_schedules;
 CREATE POLICY "Schedules updated by owner teachers or admins"
   ON public.class_schedules FOR UPDATE
   USING (
@@ -392,6 +411,7 @@ CREATE POLICY "Schedules updated by owner teachers or admins"
              OR public.teacher_can_manage_subject(class_schedules.subject_id)))
   );
 
+DROP POLICY IF EXISTS "Schedules deleted by owner teachers or admins" ON public.class_schedules;
 CREATE POLICY "Schedules deleted by owner teachers or admins"
   ON public.class_schedules FOR DELETE
   USING (
@@ -407,6 +427,7 @@ DROP POLICY IF EXISTS "Teachers can start sessions" ON public.meeting_sessions;
 DROP POLICY IF EXISTS "Teachers can end own sessions" ON public.meeting_sessions;
 DROP POLICY IF EXISTS "Teachers can delete own sessions" ON public.meeting_sessions;
 
+DROP POLICY IF EXISTS "Sessions started by assigned teachers or admins" ON public.meeting_sessions;
 CREATE POLICY "Sessions started by assigned teachers or admins"
   ON public.meeting_sessions FOR INSERT
   WITH CHECK (
@@ -419,6 +440,7 @@ CREATE POLICY "Sessions started by assigned teachers or admins"
     )
   );
 
+DROP POLICY IF EXISTS "Sessions ended by owner teachers or admins" ON public.meeting_sessions;
 CREATE POLICY "Sessions ended by owner teachers or admins"
   ON public.meeting_sessions FOR UPDATE
   USING (
@@ -428,6 +450,7 @@ CREATE POLICY "Sessions ended by owner teachers or admins"
              OR public.teacher_can_manage_subject(meeting_sessions.subject_id)))
   );
 
+DROP POLICY IF EXISTS "Sessions deleted by owner teachers or admins" ON public.meeting_sessions;
 CREATE POLICY "Sessions deleted by owner teachers or admins"
   ON public.meeting_sessions FOR DELETE
   USING (
