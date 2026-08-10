@@ -15,6 +15,21 @@ const EVENT_DOT = {
   live: 'bg-emerald-500',
 };
 
+const EVENT_BG = {
+  schedule: 'bg-blue-50',
+  deadline: 'bg-amber-50',
+  live: 'bg-emerald-50',
+};
+
+const EVENT_PRIORITY = ['live', 'schedule', 'deadline'];
+const eventBg = (evts) => {
+  if (!evts.length) return '';
+  for (const t of EVENT_PRIORITY) {
+    if (evts.some((e) => e.type === t)) return EVENT_BG[t];
+  }
+  return '';
+};
+
 const EVENT_BADGE = {
   schedule: { bg: 'bg-blue-50 text-blue-700 border-blue-100', label: 'Scheduled Class' },
   deadline: { bg: 'bg-amber-50 text-amber-700 border-amber-100', label: 'Activity Deadline' },
@@ -379,7 +394,7 @@ export default function TeacherDashboard() {
                       <div
                         key={i}
                         onClick={() => hasEvents && openDate(day)}
-                        className={`flex flex-col items-center py-1.5 ${hasEvents ? 'cursor-pointer' : ''}`}
+                        className={`flex flex-col items-center py-1.5 rounded-md ${hasEvents ? 'cursor-pointer' : ''} ${hasEvents ? eventBg(dayEvents) : ''}`}
                       >
                         {day ? (
                           <>

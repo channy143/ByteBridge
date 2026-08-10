@@ -23,6 +23,21 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
+const EVENT_BG = {
+  schedule: 'bg-blue-50',
+  deadline: 'bg-amber-50',
+  live: 'bg-emerald-50',
+};
+
+const EVENT_PRIORITY = ['live', 'schedule', 'deadline'];
+const eventBg = (evts) => {
+  if (!evts.length) return '';
+  for (const t of EVENT_PRIORITY) {
+    if (evts.some((e) => e.type === t)) return EVENT_BG[t];
+  }
+  return '';
+};
+
 export default function TeacherTimetables() {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -310,8 +325,8 @@ export default function TeacherTimetables() {
                   key={i}
                   onClick={() => hasEvents && openDate(day)}
                   className={`min-h-[100px] border-r border-b border-slate-100 last:border-r-0 p-2 ${
-                    hasEvents ? 'cursor-pointer hover:bg-slate-50/80' : ''
-                  } ${isToday ? 'bg-primary-50/40' : ''}`}
+                    hasEvents ? 'cursor-pointer' : ''
+                  } ${hasEvents ? eventBg(dayEvents) : isToday ? 'bg-primary-50/40' : ''}`}
                 >
                   {day && (
                     <>
