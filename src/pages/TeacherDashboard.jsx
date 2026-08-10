@@ -498,11 +498,26 @@ export default function TeacherDashboard() {
             </div>
 
             {loading ? (
-              <div className="p-4 space-y-2">
-                <Skeleton className="h-4 w-32 rounded" />
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Skeleton key={i} className="h-3 w-full rounded" />
-                ))}
+              <div className="p-4">
+                <Skeleton className="h-4 w-32 rounded mb-3" />
+                <div className="grid grid-cols-7 mb-1">
+                  {Array.from({ length: 7 }).map((_, i) => (
+                    <Skeleton key={i} className="h-2.5 w-9 mx-auto rounded" />
+                  ))}
+                </div>
+                <div className="grid grid-cols-7">
+                  {Array.from({ length: 35 }).map((_, i) => (
+                    <div key={i} className="flex flex-col items-center py-1.5">
+                      <Skeleton className="h-7 w-7 rounded" />
+                      <Skeleton className="h-1.5 w-1.5 rounded-full mt-0.5" />
+                    </div>
+                  ))}
+                </div>
+                <div className="pt-3 pb-1 flex items-center gap-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} className="h-2 w-14 rounded" />
+                  ))}
+                </div>
               </div>
             ) : (
               <>
