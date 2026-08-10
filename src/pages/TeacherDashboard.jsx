@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
@@ -13,12 +13,6 @@ const EVENT_DOT = {
   schedule: 'bg-blue-500',
   deadline: 'bg-amber-500',
   live: 'bg-emerald-500',
-};
-
-const EVENT_BG = {
-  schedule: 'bg-blue-50',
-  deadline: 'bg-amber-50',
-  live: 'bg-emerald-50',
 };
 
 const EVENT_PRIORITY = ['live', 'schedule', 'deadline'];
@@ -41,12 +35,12 @@ const eventDot = (e) => {
   return custom ? custom.dot : EVENT_DOT[e.type];
 };
 
-const resolveCellBg = (evts) => {
+const resolveCellSolid = (evts) => {
   if (!evts.length) return '';
   const custom = evts.find((e) => e.color && getColorById(e.color));
-  if (custom) return getColorById(custom.color).cellBg;
+  if (custom) return getColorById(custom.color).dot;
   for (const t of EVENT_PRIORITY) {
-    if (evts.some((e) => e.type === t)) return EVENT_BG[t];
+    if (evts.some((e) => e.type === t)) return EVENT_DOT[t];
   }
   return '';
 };
@@ -82,7 +76,6 @@ export default function TeacherDashboard() {
   const headersRef = useRef(null);
   const cellsRef = useRef(null);
   const dragRef = useRef({ id: null, sx: 0, sy: 0, moved: false });
-  const suppressClickRef = useRef(false);
 
   const [zoom, setZoom] = useState(null); // { scale, x, y }
   const [dragging, setDragging] = useState(false);
@@ -328,39 +321,37 @@ export default function TeacherDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, calMonth, events]);
 
-  const onPointerDown = useCallback((e) => {
+  const onPointerDown = (e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    dragRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, moved: false };
-    suppressClickRef.current = false;
+    const cell = e.target?.closest?.('[data-cal-day]');
+    dragRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      moved: false,
+      day: cell?.dataset?.calDay ? Number(cell.dataset.calDay) : null,
+    };
     containerRef.current?.setPointerCapture?.(e.pointerId);
     setDragging(true);
-  }, []);
+  };
 
-  const onPointerMove = useCallback((e) => {
+  const onPointerMove = (e) => {
     const d = dragRef.current;
     if (!d || d.pointerId !== e.pointerId) return;
     const dx = e.clientX - d.startX;
     const dy = e.clientY - d.startY;
     if (Math.abs(dx) + Math.abs(dy) > 5) d.moved = true;
     setDragOffset({ x: dx, y: dy });
-  }, []);
+  };
 
-  const onPointerEnd = useCallback((e) => {
+  const onPointerEnd = (e) => {
     const d = dragRef.current;
     if (!d || d.pointerId !== e.pointerId) return;
-    if (d.moved) suppressClickRef.current = true;
     containerRef.current?.releasePointerCapture?.(e.pointerId);
     dragRef.current = null;
     setDragging(false);
     setDragOffset({ x: 0, y: 0 });
-  }, []);
-
-  const handleDayClick = (day) => {
-    if (suppressClickRef.current) {
-      suppressClickRef.current = false;
-      return;
-    }
-    openDate(day);
+    if (!d.moved && d.day) openDate(d.day);
   };
 
   const zoomTransform = zoom
@@ -540,28 +531,25 @@ export default function TeacherDashboard() {
                         const isToday = date && toDateKey(date) === toDateKey(now);
                         const dayEvents = dateKey ? eventsForDate(dateKey) : [];
                         const hasEvents = dayEvents.length > 0;
+                        const solidBg = !isToday && hasEvents ? resolveCellSolid(dayEvents) : '';
 
                         return (
                           <div
                             key={i}
-                            onClick={() => handleDayClick(day)}
+                            data-cal-day={day || undefined}
                             className={`flex flex-col items-center py-1.5 rounded-md ${
                               isToday
                                 ? 'bg-primary-600 text-white cursor-pointer'
-                                : hasEvents
-                                  ? 'cursor-pointer'
+                                : solidBg
+                                  ? `${solidBg} text-white cursor-pointer`
                                   : ''
-                            } ${!isToday && hasEvents ? resolveCellBg(dayEvents) : ''}`}
+                            }`}
                           >
                             {day ? (
                               <>
                                 <span
                                   className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[12px] font-semibold ${
-                                    isToday
-                                      ? 'text-white'
-                                      : hasEvents
-                                        ? 'text-slate-800'
-                                        : 'text-slate-400'
+                                    isToday || hasEvents ? 'text-white' : 'text-slate-400'
                                   }`}
                                 >
                                   {day}
@@ -569,7 +557,7 @@ export default function TeacherDashboard() {
                                 {hasEvents && (
                                   <div className="flex items-center gap-0.5 mt-0.5">
                                     {dayEvents.slice(0, 3).map((e) => (
-                                      <span key={e.id} className={`w-1.5 h-1.5 rounded-full ${isToday ? 'bg-white/80' : eventDot(e)}`} />
+                                      <span key={e.id} className="w-1.5 h-1.5 rounded-full bg-white/80" />
                                     ))}
                                   </div>
                                 )}

@@ -26,15 +26,20 @@ export function AuthProvider({ children }) {
     });
 
     // Listen for changes on auth state
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const currentUser = session?.user ?? null;
-      setUser(currentUser);
+
       if (currentUser) {
-        // Same as above: hold the loading state while the profile loads
-        // so the login → dashboard transition never flashes the login page.
-        setLoading(true);
-        fetchProfile(currentUser.id, currentUser);
+        setUser(currentUser);
+        // Only hold the loading state / reload the profile when the user actually
+        // signs in or a session is first established. Token refreshes (which fire
+        // when a tab regains focus) must NOT remount the app.
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+          setLoading(true);
+          fetchProfile(currentUser.id, currentUser);
+        }
       } else {
+        setUser(null);
         setProfile(null);
         setLoading(false);
       }
