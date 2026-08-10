@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 import PageHeader from '../components/ui/PageHeader';
 import { Skeleton } from '../components/ui/Skeleton';
-import { BookOpen, Users, FolderOpen, ClipboardList, ChevronRight, User } from 'lucide-react';
+import { BookOpen, Users, FolderOpen, ClipboardList, ChevronRight } from 'lucide-react';
 
 const CARD_GRADS = [
   'from-primary-500 to-primary-700',
@@ -130,6 +130,7 @@ export default function TeacherSubjects() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {subjects.map((s) => {
             const colorIdx = hashColor(s.id, CARD_GRADS.length);
+            const code = (s.subject_code || '').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'SUB';
             return (
               <button
                 key={s.id}
@@ -147,21 +148,12 @@ export default function TeacherSubjects() {
                     )}
                   </div>
                   <span className={`absolute right-[56px] bottom-0 translate-y-1/2 w-[86px] h-[86px] rounded-full ring-4 ring-white shadow-md flex items-center justify-center overflow-hidden flex-shrink-0 ${CARD_SOLIDS[colorIdx]} text-white`}>
-                    {profile?.full_name ? (
-                      <span className="text-[28px] font-bold leading-none">{profile.full_name.trim().charAt(0).toUpperCase()}</span>
-                    ) : (
-                      <User className="w-7 h-7 text-white/70" />
-                    )}
+                    <span className={`font-extrabold leading-none inline-block ${code.length > 2 ? 'text-[22px] tracking-wide' : 'text-[30px]'}`}>{code}</span>
                   </span>
                 </div>
 
                 <div className="px-4 pt-3 pr-[150px] pb-4 flex-1 flex flex-col">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <p className="text-[12px] font-semibold text-slate-800 truncate">{profile?.full_name || 'You'}</p>
-                    <span className="text-[10.5px] text-slate-400 whitespace-nowrap">· Subject Teacher</span>
-                  </div>
-
-                  <div className="mt-2.5 grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <div className="rounded-lg bg-slate-50 border border-slate-100 py-2 text-center">
                       <Users className="w-3.5 h-3.5 text-slate-400 mx-auto" />
                       <p className="mt-0.5 text-[13px] font-bold text-slate-800 leading-tight">{s.students}</p>
