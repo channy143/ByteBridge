@@ -49,7 +49,9 @@ UPDATE public.modules SET is_published = TRUE WHERE is_published IS NULL;
 -- ------------------------------------------------------------
 -- 1. Role helper functions
 -- ------------------------------------------------------------
-DROP FUNCTION IF EXISTS public.current_profile_id();
+-- Note: no DROP ... CASCADE on current_profile_id() — policies on
+-- announcements/attachments/class_schedules/meeting_sessions depend
+-- on it. CREATE OR REPLACE swaps the body while keeping dependents.
 CREATE OR REPLACE FUNCTION public.current_profile_id()
 RETURNS UUID
 LANGUAGE sql
