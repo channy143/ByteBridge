@@ -5,6 +5,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 import TeacherSubjects from './pages/TeacherSubjects';
+import TeacherTimetables from './pages/TeacherTimetables';
 import TeacherSubjectPage from './pages/TeacherSubjectPage';
 import AdminOverview from './pages/admin/AdminOverview';
 import AdminStudents from './pages/admin/AdminStudents';
@@ -50,6 +51,7 @@ function App() {
           >
             <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['student']}><Dashboard /></ProtectedRoute>} />
             <Route path="/teacher/dashboard" element={<ProtectedRoute allowedRoles={['teacher', 'admin']}><TeacherDashboard /></ProtectedRoute>} />
+            <Route path="/teacher/timetables" element={<ProtectedRoute allowedRoles={['teacher', 'admin']}><TeacherTimetables /></ProtectedRoute>} />
             <Route path="/teacher/subjects" element={<ProtectedRoute allowedRoles={['teacher', 'admin']}><TeacherSubjects /></ProtectedRoute>} />
             <Route path="/teacher/subjects/:subjectId" element={<ProtectedRoute allowedRoles={['teacher', 'admin']}><TeacherSubjectPage /></ProtectedRoute>} />
 

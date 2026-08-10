@@ -1,32 +1,45 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 import PageHeader from '../components/ui/PageHeader';
 import { Skeleton } from '../components/ui/Skeleton';
 import { greeting, firstName } from '../lib/status';
-import {
-  BookOpen, ClipboardList, Inbox, Video, FileText, Megaphone,
-  Upload, CalendarPlus, Plus, ChevronRight, ShieldCheck,
-} from 'lucide-react';
+import { BookOpen, ClipboardList, Inbox, Video, ChevronRight, CalendarDays, Clock, X } from 'lucide-react';
 
-const QUICK_ACTIONS = [
-  { key: 'activity', label: 'Create Activity', icon: ClipboardList, tab: 'activities', to: '/teacher/subjects' },
-  { key: 'module', label: 'Create Module', icon: FileText, tab: 'modules', to: '/teacher/subjects' },
-  { key: 'announcement', label: 'Post Announcement', icon: Megaphone, tab: 'announcements', to: '/teacher/subjects' },
-  { key: 'material', label: 'Upload Material', icon: Upload, tab: 'materials', to: '/teacher/subjects' },
-  { key: 'class', label: 'Schedule Class', icon: CalendarPlus, to: '/classroom', live: true },
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const EVENT_DOT = {
+  schedule: 'bg-blue-500',
+  deadline: 'bg-amber-500',
+  live: 'bg-emerald-500',
+};
+
+const EVENT_BADGE = {
+  schedule: { bg: 'bg-blue-50 text-blue-700 border-blue-100', label: 'Scheduled Class' },
+  deadline: { bg: 'bg-amber-50 text-amber-700 border-amber-100', label: 'Activity Deadline' },
+  live: { bg: 'bg-emerald-50 text-emerald-700 border-emerald-100', label: 'Live Session' },
+};
+
+const daysInMonth = (d) => new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+const firstDayOfWeek = (d) => new Date(d.getFullYear(), d.getMonth(), 1).getDay();
+const toDateKey = (d) => d.toISOString().slice(0, 10);
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
 export default function TeacherDashboard() {
   const { profile } = useAuth();
   const navigate = useNavigate();
+  const now = new Date();
 
   const [loading, setLoading] = useState(true);
   const [subjects, setSubjects] = useState([]);
   const [stats, setStats] = useState({ subjects: 0, activities: 0, pendingReviews: 0, upcomingClasses: 0 });
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -98,6 +111,53 @@ export default function TeacherDashboard() {
           upcoming = 0;
         }
 
+        /* fetch events for the mini calendar */
+        let evts = [];
+        if (subjectIds.length > 0) {
+          const threeMonthsAgo = new Date(now);
+          threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+          const sixMonthsAhead = new Date(now);
+          sixMonthsAhead.setMonth(sixMonthsAhead.getMonth() + 6);
+
+          const [{ data: scheds }, { data: acts }, { data: sessions }] = await Promise.all([
+            supabase
+              .from('class_schedules')
+              .select('id, subject_id, title, starts_at, ends_at')
+              .in('subject_id', subjectIds)
+              .gte('ends_at', threeMonthsAgo.toISOString())
+              .lte('starts_at', sixMonthsAhead.toISOString()),
+            supabase
+              .from('activities')
+              .select('id, subject_id, title, deadline')
+              .in('subject_id', subjectIds)
+              .not('deadline', 'is', null)
+              .gte('deadline', threeMonthsAgo.toISOString())
+              .lte('deadline', sixMonthsAhead.toISOString()),
+            supabase
+              .from('meeting_sessions')
+              .select('id, subject_id, room_name, started_at, ended_at')
+              .in('subject_id', subjectIds)
+              .gte('started_at', threeMonthsAgo.toISOString())
+              .lte('started_at', sixMonthsAhead.toISOString()),
+          ]);
+
+          evts = [
+            ...(scheds || []).map((s) => ({
+              id: `sch-${s.id}`, type: 'schedule', title: s.title,
+              subject_id: s.subject_id, start: s.starts_at, end: s.ends_at,
+            })),
+            ...(acts || []).map((a) => ({
+              id: `act-${a.id}`, type: 'deadline', title: a.title,
+              subject_id: a.subject_id, deadline: a.deadline, start: a.deadline,
+            })),
+            ...(sessions || []).map((s) => ({
+              id: `ses-${s.id}`, type: 'live',
+              title: s.room_name?.replace(/bytebridge-/i, '').replace(/-\d+$/, '').replace(/-/g, ' ') || 'Live Session',
+              subject_id: s.subject_id, start: s.started_at, end: s.ended_at,
+            })),
+          ];
+        }
+
         if (cancelled) return;
         setSubjects(
           subs.map((s) => ({
@@ -113,6 +173,7 @@ export default function TeacherDashboard() {
           pendingReviews,
           upcomingClasses: upcoming,
         });
+        setEvents(evts);
       } catch (err) {
         console.error('Error loading teacher dashboard:', err);
       } finally {
@@ -122,23 +183,40 @@ export default function TeacherDashboard() {
 
     load();
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile]);
 
-  const runQuickAction = (action) => {
-    if (subjects.length === 0) {
-      navigate(action.to);
-      return;
-    }
-    setPendingAction(action);
-    setPickerOpen(true);
-  };
+  /* calendar helpers */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const calMonth = useMemo(() => new Date(now.getFullYear(), now.getMonth(), 1), []);
 
-  const pickSubject = (subjectId) => {
-    const action = pendingAction;
-    setPickerOpen(false);
-    setPendingAction(null);
-    if (action.live) navigate(`/classroom?subject=${subjectId}`);
-    else navigate(`/teacher/subjects/${subjectId}?tab=${action.tab}`);
+  const calDays = useMemo(() => {
+    const total = daysInMonth(calMonth);
+    const start = firstDayOfWeek(calMonth);
+    const cells = [];
+    for (let i = 0; i < start; i++) cells.push(null);
+    for (let d = 1; d <= total; d++) cells.push(d);
+    while (cells.length % 7 !== 0) cells.push(null);
+    return cells;
+  }, [calMonth]);
+
+  const eventsForDate = (dateKey) =>
+    events.filter((e) => {
+      const eDate = e.deadline || e.start;
+      return eDate && toDateKey(new Date(eDate)) === dateKey;
+    });
+
+  const subjectName = (sid) => subjects.find((s) => s.id === sid)?.subject_title || '';
+
+  const openDate = (day) => {
+    if (!day) return;
+    const date = new Date(calMonth.getFullYear(), calMonth.getMonth(), day);
+    const key = toDateKey(date);
+    const dayEvents = eventsForDate(key);
+    if (dayEvents.length > 0) {
+      setSelectedDate({ day, date, key, events: dayEvents });
+      setShowModal(true);
+    }
   };
 
   const statCells = [
@@ -153,14 +231,6 @@ export default function TeacherDashboard() {
       <PageHeader
         title={`${greeting()}, ${firstName(profile?.full_name)}`}
         subtitle="Here's what's happening with your BTLED ICT subjects."
-        actions={
-          <button
-            onClick={() => runQuickAction(QUICK_ACTIONS.find((a) => a.key === 'activity'))}
-            className="ws-btn-primary"
-          >
-            <Plus className="w-4 h-4" /> Quick Action
-          </button>
-        }
       />
 
       {/* Stat cards */}
@@ -258,64 +328,173 @@ export default function TeacherDashboard() {
           </div>
         </div>
 
-        {/* Quick Actions */}
+        {/* Timetable mini calendar */}
         <div className="space-y-4">
           <div className="ws-card">
             <div className="ws-card-header">
-              <h2 className="ws-section-title">Quick Actions</h2>
+              <h2 className="ws-section-title">Timetable</h2>
+              <button
+                onClick={() => navigate('/teacher/timetables')}
+                className="flex items-center gap-1 text-[12px] font-medium text-primary-600 hover:text-primary-700"
+              >
+                View Timetable <CalendarDays className="w-3.5 h-3.5" />
+              </button>
             </div>
-            <div className="p-3 grid grid-cols-1 gap-1.5">
-              {QUICK_ACTIONS.map((a) => (
-                <button
-                  key={a.key}
-                  onClick={() => runQuickAction(a)}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-primary-50/60 transition-colors group"
-                >
-                  <span className="w-8 h-8 rounded-md bg-slate-100 text-slate-600 group-hover:bg-primary-100 group-hover:text-primary-700 flex items-center justify-center flex-shrink-0">
-                    <a.icon className="w-4 h-4" />
-                  </span>
-                  <span className="text-[13px] font-medium text-slate-700">{a.label}</span>
-                  <ChevronRight className="w-4 h-4 text-slate-300 ml-auto" />
-                </button>
-              ))}
-            </div>
-            <p className="px-4 pb-4 text-[11px] text-slate-400 flex items-center gap-1">
-              <ShieldCheck className="w-3 h-3" /> Content is linked to subjects assigned to you by the administrator.
-            </p>
+
+            {loading ? (
+              <div className="p-4 space-y-2">
+                <Skeleton className="h-4 w-32 rounded" />
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-3 w-full rounded" />
+                ))}
+              </div>
+            ) : (
+              <>
+                {/* Month label */}
+                <div className="px-4 pt-1 pb-2">
+                  <p className="text-[13px] font-semibold text-slate-800">
+                    {MONTH_NAMES[calMonth.getMonth()]} {calMonth.getFullYear()}
+                  </p>
+                </div>
+
+                {/* Day headers */}
+                <div className="grid grid-cols-7 px-2">
+                  {DAY_LABELS.map((d) => (
+                    <div key={d} className="text-center text-[10px] font-semibold uppercase tracking-wide text-slate-400 py-1">
+                      {d}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Day cells */}
+                <div className="grid grid-cols-7 px-2 pb-3">
+                  {calDays.map((day, i) => {
+                    const date = day ? new Date(calMonth.getFullYear(), calMonth.getMonth(), day) : null;
+                    const dateKey = date ? toDateKey(date) : null;
+                    const isToday = date && toDateKey(date) === toDateKey(now);
+                    const dayEvents = dateKey ? eventsForDate(dateKey) : [];
+                    const hasEvents = dayEvents.length > 0;
+
+                    return (
+                      <div
+                        key={i}
+                        onClick={() => hasEvents && openDate(day)}
+                        className={`flex flex-col items-center py-1.5 ${hasEvents ? 'cursor-pointer' : ''}`}
+                      >
+                        {day ? (
+                          <>
+                            <span
+                              className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[12px] font-semibold ${
+                                isToday
+                                  ? 'bg-primary-600 text-white'
+                                  : hasEvents
+                                    ? 'text-slate-800'
+                                    : 'text-slate-400'
+                              }`}
+                            >
+                              {day}
+                            </span>
+                            {hasEvents && (
+                              <div className="flex items-center gap-0.5 mt-0.5">
+                                {dayEvents.slice(0, 3).map((e) => (
+                                  <span key={e.id} className={`w-1.5 h-1.5 rounded-full ${EVENT_DOT[e.type]}`} />
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <span className="w-7 h-7" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Legend */}
+                <div className="px-4 pb-4 flex items-center gap-3 flex-wrap">
+                  {Object.entries(EVENT_DOT).map(([key, dot]) => (
+                    <div key={key} className="flex items-center gap-1">
+                      <span className={`w-2 h-2 rounded-full ${dot}`} />
+                      <span className="text-[10px] text-slate-500 capitalize">
+                        {key === 'deadline' ? 'Deadline' : key === 'schedule' ? 'Scheduled' : 'Live'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Subject picker for quick actions */}
-      {pickerOpen && (
+      {/* Date detail modal */}
+      {showModal && selectedDate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="absolute inset-0 bg-slate-900/40" onClick={() => { setPickerOpen(false); setPendingAction(null); }} />
-          <div className="relative w-full max-w-[420px] bg-white rounded-xl border border-slate-200 shadow-xl p-5">
-            <h3 className="text-[15px] font-bold text-slate-900">Choose a subject</h3>
-            <p className="text-[12px] text-slate-400 mt-0.5 mb-4">
-              {pendingAction?.label} will open inside the chosen subject.
-            </p>
-            <div className="space-y-1.5 max-h-72 overflow-y-auto">
-              {subjects.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => pickSubject(s.id)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-200 hover:border-primary-300 hover:bg-primary-50/50 text-left transition-colors"
-                >
-                  <span className="text-[11px] font-semibold text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded shrink-0">
-                    {s.subject_code}
-                  </span>
-                  <span className="text-[13px] font-medium text-slate-700 truncate">{s.subject_title}</span>
-                </button>
-              ))}
+          <div className="absolute inset-0 bg-slate-900/40" onClick={() => setShowModal(false)} />
+          <div className="relative w-full max-w-md bg-white rounded-xl border border-slate-200 shadow-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between">
+              <div>
+                <p className="text-[10.5px] font-semibold uppercase tracking-wide text-primary-600">
+                  {selectedDate.date.toLocaleDateString(undefined, { weekday: 'long' })}
+                </p>
+                <h3 className="text-[16px] font-bold text-slate-900 mt-0.5">
+                  {selectedDate.date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                </h3>
+                <p className="text-[12px] text-slate-400 mt-0.5">
+                  {selectedDate.events.length} event{selectedDate.events.length === 1 ? '' : 's'}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowModal(false)}
+                className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => { setPickerOpen(false); setPendingAction(null); }}
-              className="mt-4 w-full ws-btn-secondary"
-            >
-              Cancel
-            </button>
+            <div className="divide-y divide-slate-50 max-h-80 overflow-y-auto">
+              {selectedDate.events.map((e) => {
+                const c = EVENT_BADGE[e.type];
+                const startTime = e.start ? new Date(e.start) : null;
+                const endTime = e.end ? new Date(e.end) : null;
+                const timeRange = startTime
+                  ? `${startTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${endTime ? ` – ${endTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}`
+                  : null;
+                return (
+                  <div key={e.id} className="px-5 py-3.5 flex items-start gap-3">
+                    <span className={`mt-0.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${EVENT_DOT[e.type]}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-slate-800">{e.title}</p>
+                      <p className="text-[11.5px] text-slate-400 mt-0.5">
+                        {c.label} · {subjectName(e.subject_id)}
+                      </p>
+                      {timeRange && (
+                        <p className="text-[11.5px] text-slate-500 mt-1 flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> {timeRange}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowModal(false);
+                        if (e.type === 'schedule') navigate(`/classroom?subject=${e.subject_id}`);
+                        else navigate(`/teacher/subjects/${e.subject_id}?tab=${e.type === 'deadline' ? 'activities' : 'classroom'}`);
+                      }}
+                      className="text-[11px] font-medium text-primary-600 hover:text-primary-700 flex-shrink-0 mt-0.5"
+                    >
+                      View
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50">
+              <button
+                onClick={() => setShowModal(false)}
+                className="w-full ws-btn-secondary justify-center"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

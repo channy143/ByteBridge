@@ -15,6 +15,7 @@ import {
   BarChart3,
   ClipboardList,
   Settings,
+  CalendarDays,
 } from 'lucide-react';
 import Avatar from '../ui/Avatar';
 
@@ -28,6 +29,7 @@ const STUDENT_LINKS = [
 
 const TEACHER_LINKS = [
   { to: '/teacher/dashboard', label: 'Overview', icon: LayoutDashboard },
+  { to: '/teacher/timetables', label: 'Timetables', icon: CalendarDays },
   { to: '/teacher/subjects', label: 'My Subjects', icon: BookOpen },
   { to: '/roster', label: 'Activities', icon: ClipboardList },
   { to: '/announcements', label: 'Announcements', icon: Megaphone },
