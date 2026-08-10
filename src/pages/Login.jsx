@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Navigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { GraduationCap, User, ShieldCheck, X } from 'lucide-react';
@@ -8,7 +8,7 @@ import AuthButton from '../components/auth/AuthButton';
 import { homePathFor } from '../utils/roles';
 
 export default function Login() {
-  const { signInAsTeacher, signInAsStudent, signInAsAdmin, user, profile, loading } = useAuth();
+  const { signInAsTeacher, signInAsStudent, signInAsAdmin, registerTeacher, user, profile, loading } = useAuth();
   const location = useLocation();
   const navigatedRole = location.state?.role;
 
@@ -20,27 +20,71 @@ export default function Login() {
     return localStorage.getItem('bytebridge_role') || 'student';
   });
   const [studentForm, setStudentForm] = useState({ studentId: '', birthdate: '' });
-  const [teacherForm, setTeacherForm] = useState({ fullName: '', subjectCode: '' });
+  const [teacherForm, setTeacherForm] = useState({ fullName: '', password: '' });
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [loadingLocal, setLoadingLocal] = useState(false);
 
-  // Hidden admin login (Ctrl + Alt + A). No visible hint on the page.
+  // Teacher self-registration (open by design — the admin assigns subjects
+  // after the account exists).
+  const [regOpen, setRegOpen] = useState(false);
+  const [regForm, setRegForm] = useState({ fullName: '', email: '', password: '', confirm: '' });
+  const [regError, setRegError] = useState('');
+  const [regSaving, setRegSaving] = useState(false);
+
+  // Hidden admin login: press CTRL + A, then T + A. No visible hint.
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminForm, setAdminForm] = useState({ email: '', password: '' });
   const [adminError, setAdminError] = useState('');
   const [adminLoading, setAdminLoading] = useState(false);
+  const seqRef = useRef({ keys: [], timer: null });
 
   useEffect(() => {
+    const resetSeq = () => {
+      if (seqRef.current.timer) clearTimeout(seqRef.current.timer);
+      seqRef.current = { keys: [], timer: null };
+    };
+
     const onKeyDown = (e) => {
-      if (e.ctrlKey && e.altKey && (e.key === 'a' || e.key === 'A')) {
+      if (e.key === 'Escape') {
+        resetSeq();
+        setAdminOpen(false);
+        return;
+      }
+
+      const k = e.key.toLowerCase();
+      if (e.ctrlKey && k === 'a') {
+        // CTRL + A arms the sequence
         e.preventDefault();
+        resetSeq();
+        seqRef.current.keys = ['a'];
+        seqRef.current.timer = setTimeout(resetSeq, 4000);
+        return;
+      }
+
+      const next = [...seqRef.current.keys, k];
+      if (next.length > 3) {
+        resetSeq();
+        return;
+      }
+      if (next[0] !== 'a') return;
+      if (['t', 'a'].slice(0, next.length - 1).join('') !== next.slice(0, next.length - 1).join('')) {
+        resetSeq();
+        return;
+      }
+      seqRef.current.keys = next;
+      if (next[0] === 'a' && next[1] === 't' && next[2] === 'a') {
+        resetSeq();
         setAdminOpen(true);
         setAdminError('');
       }
-      if (e.key === 'Escape') setAdminOpen(false);
     };
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      resetSeq();
+    };
   }, []);
 
   // Wait for auth to finish loading before redirecting automatically
@@ -75,18 +119,40 @@ export default function Login() {
   const handleTeacherSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setNotice('');
     setLoadingLocal(true);
 
     try {
       const { error: signInError } = await signInAsTeacher(
         teacherForm.fullName,
-        teacherForm.subjectCode
+        teacherForm.password
       );
       if (signInError) throw signInError;
-    } catch {
-      setError('Invalid teacher credentials. Please check your name and subject code.');
+    } catch (err) {
+      setError(err.message || 'Invalid teacher credentials. Please check your name and password.');
     } finally {
       setLoadingLocal(false);
+    }
+  };
+
+  const handleRegisterTeacher = async (e) => {
+    e.preventDefault();
+    setRegError('');
+    if (regForm.password !== regForm.confirm) {
+      setRegError('Passwords do not match.');
+      return;
+    }
+    setRegSaving(true);
+    try {
+      await registerTeacher(regForm.fullName, regForm.email, regForm.password);
+      setTeacherForm({ fullName: regForm.fullName.trim(), password: '' });
+      setRegOpen(false);
+      setRegForm({ fullName: '', email: '', password: '', confirm: '' });
+      setNotice('Teacher account created. Sign in with your name and password.');
+    } catch (err) {
+      setRegError(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setRegSaving(false);
     }
   };
 
@@ -111,6 +177,8 @@ export default function Login() {
     setRole(nextRole);
     localStorage.setItem('bytebridge_role', nextRole);
     setError('');
+    setNotice('');
+    setRegOpen(false);
   };
 
   return (
@@ -156,6 +224,11 @@ export default function Login() {
             {error}
           </div>
         )}
+        {notice && (
+          <div className="mb-5 bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm rounded-lg px-4 py-3">
+            {notice}
+          </div>
+        )}
 
         {role === 'student' ? (
           <form className="space-y-5" onSubmit={handleStudentSubmit}>
@@ -197,6 +270,69 @@ export default function Login() {
               </Link>
             </p>
           </form>
+        ) : regOpen ? (
+          <form className="space-y-5" onSubmit={handleRegisterTeacher}>
+            <h2 className="text-lg font-bold text-slate-900">Register as a Teacher</h2>
+
+            <AuthInput
+              label="Full Name"
+              type="text"
+              required
+              placeholder="Enter your full name"
+              value={regForm.fullName}
+              onChange={(e) => setRegForm({ ...regForm, fullName: e.target.value })}
+            />
+            <AuthInput
+              label="Email Address"
+              type="email"
+              required
+              placeholder="you@bytebridge.edu"
+              value={regForm.email}
+              onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
+            />
+            <AuthInput
+              label="Password"
+              type="password"
+              required
+              placeholder="Create a password"
+              value={regForm.password}
+              onChange={(e) => setRegForm({ ...regForm, password: e.target.value })}
+            />
+            <AuthInput
+              label="Confirm Password"
+              type="password"
+              required
+              placeholder="Re-enter your password"
+              value={regForm.confirm}
+              onChange={(e) => setRegForm({ ...regForm, confirm: e.target.value })}
+            />
+
+            {regError && (
+              <div className="bg-red-50 border border-red-100 text-red-700 text-[13px] rounded-lg px-3.5 py-2.5">
+                {regError}
+              </div>
+            )}
+
+            <AuthButton loading={regSaving} loadingText="Creating Account...">
+              Create Teacher Account
+            </AuthButton>
+
+            <p className="text-[12.5px] text-slate-400">
+              Your account will be created immediately. An administrator assigns your subjects
+              before you can start managing classes.
+            </p>
+
+            <p className="text-center text-sm text-slate-500">
+              Already registered?{' '}
+              <button
+                type="button"
+                onClick={() => { setRegOpen(false); setRegError(''); }}
+                className="font-semibold text-primary-900 hover:text-primary-700 transition-colors"
+              >
+                Back to sign in
+              </button>
+            </p>
+          </form>
         ) : (
           <form className="space-y-5" onSubmit={handleTeacherSubmit}>
             <h2 className="text-lg font-bold text-slate-900">Teacher Access</h2>
@@ -211,12 +347,12 @@ export default function Login() {
             />
 
             <AuthInput
-              label="Subject Code"
-              type="text"
+              label="Password"
+              type="password"
               required
-              placeholder="Enter your assigned subject code"
-              value={teacherForm.subjectCode}
-              onChange={(e) => setTeacherForm({ ...teacherForm, subjectCode: e.target.value })}
+              placeholder="Enter your password"
+              value={teacherForm.password}
+              onChange={(e) => setTeacherForm({ ...teacherForm, password: e.target.value })}
             />
 
             <AuthButton loading={loadingLocal} loadingText="Signing In...">
@@ -224,12 +360,23 @@ export default function Login() {
             </AuthButton>
 
             <p className="text-[12.5px] text-slate-400">
-              Use the subject code assigned to you by the administrator.
+              Use the account password set for you (or chosen at registration).
+            </p>
+
+            <p className="text-center text-sm text-slate-500">
+              Don't have an account?{' '}
+              <button
+                type="button"
+                onClick={() => { setRegOpen(true); setRegError(''); }}
+                className="font-semibold text-primary-900 hover:text-primary-700 transition-colors"
+              >
+                Register as a teacher
+              </button>
             </p>
           </form>
         )}
 
-        {/* Hidden Admin Login (Ctrl + Alt + A) */}
+        {/* Hidden Admin Login (CTRL + A, then T + A) */}
         {adminOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
             <div

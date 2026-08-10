@@ -5,7 +5,16 @@ import {
   Video,
   User,
   Layout,
-  ShieldCheck,
+  GraduationCap,
+  Users,
+  FolderOpen,
+  Layers,
+  Link2,
+  FileText,
+  Megaphone,
+  BarChart3,
+  ClipboardList,
+  Settings,
 } from 'lucide-react';
 import Avatar from '../ui/Avatar';
 
@@ -20,11 +29,56 @@ const STUDENT_LINKS = [
 const TEACHER_LINKS = [
   { to: '/teacher/dashboard', label: 'Overview', icon: LayoutDashboard },
   { to: '/teacher/subjects', label: 'My Subjects', icon: BookOpen },
+  { to: '/roster', label: 'Activities', icon: ClipboardList },
+  { to: '/announcements', label: 'Announcements', icon: Megaphone },
   { to: '/classroom', label: 'Virtual Classroom', icon: Video },
 ];
 
-const ADMIN_LINKS = [
-  { to: '/admin', label: 'Administration', icon: ShieldCheck },
+const ADMIN_SECTIONS = [
+  {
+    title: 'Administration',
+    links: [
+      { to: '/admin/overview', label: 'Overview', icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: 'Users',
+    links: [
+      { to: '/admin/students', label: 'Students', icon: GraduationCap },
+      { to: '/admin/teachers', label: 'Teachers', icon: Users },
+    ],
+  },
+  {
+    title: 'Academic',
+    links: [
+      { to: '/admin/programs', label: 'Programs', icon: Layers },
+      { to: '/admin/sections', label: 'Sections', icon: FolderOpen },
+      { to: '/admin/subjects', label: 'Subjects', icon: BookOpen },
+      { to: '/admin/assignments', label: 'Subject Assignments', icon: Link2 },
+      { to: '/admin/syllabi', label: 'Syllabi', icon: FileText },
+    ],
+  },
+  {
+    title: 'Communication',
+    links: [
+      { to: '/admin/announcements', label: 'Announcements', icon: Megaphone },
+    ],
+  },
+  {
+    title: 'Reports',
+    links: [
+      { to: '/admin/reports/enrollment', label: 'Enrollment', icon: BarChart3 },
+      { to: '/admin/reports/progress', label: 'Student Progress', icon: BarChart3 },
+      { to: '/admin/reports/academic', label: 'Academic Reports', icon: BarChart3 },
+    ],
+  },
+  {
+    title: 'System',
+    links: [
+      { to: '/admin/logs', label: 'Audit Logs', icon: ClipboardList },
+      { to: '/admin/settings', label: 'Settings', icon: Settings },
+    ],
+  },
 ];
 
 const ACCOUNT_LINKS = [{ to: '/profile', label: 'Profile', icon: User }];
@@ -65,10 +119,8 @@ function NavSection({ title, links, onNavigate }) {
 }
 
 export default function Sidebar({ profile, onNavigate }) {
-  const workspaceLinks =
-    profile?.role === 'teacher' ? TEACHER_LINKS
-      : profile?.role === 'admin' ? ADMIN_LINKS
-      : STUDENT_LINKS;
+  const isAdmin = profile?.role === 'admin';
+  const isTeacher = profile?.role === 'teacher';
   const roleBadge = ROLE_BADGE[profile?.role] || 'User';
 
   return (
@@ -81,7 +133,17 @@ export default function Sidebar({ profile, onNavigate }) {
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-4">
-        <NavSection title="Workspace" links={workspaceLinks} onNavigate={onNavigate} />
+        {isAdmin ? (
+          ADMIN_SECTIONS.map((section) => (
+            <NavSection key={section.title} title={section.title} links={section.links} onNavigate={onNavigate} />
+          ))
+        ) : (
+          <NavSection
+            title={isTeacher ? 'Workspace' : 'Workspace'}
+            links={isTeacher ? TEACHER_LINKS : STUDENT_LINKS}
+            onNavigate={onNavigate}
+          />
+        )}
         <NavSection title="Account" links={ACCOUNT_LINKS} onNavigate={onNavigate} />
       </div>
 

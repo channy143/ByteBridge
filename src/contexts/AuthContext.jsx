@@ -129,20 +129,31 @@ export function AuthProvider({ children }) {
     return { data, error };
   };
 
-  // Teacher sign in via full name + subject code
-  const signInAsTeacher = async (name, subjectCode) => {
-    // 1. RPC verifies identity, resets password to the subject code, returns the auth email
+  // Teacher sign in via full name + password
+  const signInAsTeacher = async (name, password) => {
+    // 1. RPC resolves the teacher's name to their auth email
     const { data, error: rpcError } = await supabase.rpc('login_teacher', {
       p_full_name: name,
-      p_subject_code: subjectCode,
     });
 
     if (rpcError) throw rpcError;
     if (!data?.success) throw new Error(data?.error || 'Login failed.');
 
-    // 2. Sign in with the email + subject code (lowercase, no spaces) as password
-    const password = subjectCode.trim().toLowerCase().replace(/\s+/g, '');
+    // 2. Sign in with the account email + the password they entered
     return await signIn(data.email, password);
+  };
+
+  // Teacher self-registration (from the Login page)
+  const registerTeacher = async (fullName, email, password) => {
+    const { data, error } = await supabase.rpc('register_teacher_account', {
+      p_full_name: fullName.trim(),
+      p_email: email.trim(),
+      p_password: password,
+    });
+
+    if (error) throw error;
+    if (!data?.success) throw new Error(data?.error || 'Registration failed.');
+    return data;
   };
 
   // Student sign in via student ID + birthday
@@ -201,6 +212,7 @@ export function AuthProvider({ children }) {
       signInAsTeacher,
       signInAsStudent,
       signInAsAdmin,
+      registerTeacher,
       resetPassword,
       refreshProfile: () => user ? fetchProfile(user.id, user) : Promise.resolve(),
     }}>
