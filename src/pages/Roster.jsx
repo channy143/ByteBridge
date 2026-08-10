@@ -19,6 +19,8 @@ import {
   Link2,
   CheckCircle2,
   AlertTriangle,
+  Edit2,
+  Save,
 } from 'lucide-react';
 import { formatDue, formatTimeLeft } from '../lib/status';
 
@@ -55,6 +57,7 @@ export default function RosterAndDockets() {
   const [drawerSubs, setDrawerSubs] = useState([]);
   const [drawerSubsLoading, setDrawerSubsLoading] = useState(false);
   const [gradeDraft, setGradeDraft] = useState({});
+  const [editMode, setEditMode] = useState({});
 
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', deadline: '', points: 100, subject_id: '' });
@@ -257,9 +260,10 @@ export default function RosterAndDockets() {
       console.error('Error loading attachments:', err);
     }
     if (!isTeacher) return;
-    setDrawerSubsLoading(true);
+setDrawerSubsLoading(true);
     setDrawerSubs([]);
     setGradeDraft({});
+    setEditMode({});
     try {
       const { data, error } = await supabase.from('submissions').select('*').eq('activity_id', activity.id);
       if (error) throw error;
@@ -792,8 +796,12 @@ const fetchRegisteredStudents = async () => {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {drawerSubs.map((sub) => {
+{drawerSubs.map((sub) => {
                       const draft = gradeDraft[sub.id] || {};
+                      const isGraded = sub.status === 'Graded' && sub.grade != null;
+                      const editing = editMode[sub.id] ?? !isGraded;
+                      const gradeValue = draft.grade !== undefined && draft.grade !== '' ? draft.grade : (sub.grade ?? '');
+                      const feedbackValue = draft.feedback !== undefined ? draft.feedback : (sub.feedback ?? '');
                       return (
                         <div key={sub.id} className="border border-slate-200 rounded-md p-3">
                           <div className="flex items-center justify-between gap-2">
@@ -825,20 +833,28 @@ const fetchRegisteredStudents = async () => {
                               min={0}
                               max={selected.points}
                               placeholder={`Grade /${selected.points}`}
-                              defaultValue={sub.grade ?? ''}
-                              onChange={(e) => setGradeDraft({ ...gradeDraft, [sub.id]: { ...draft, grade: e.target.value } })}
-                              className="ws-input w-28"
+                              value={gradeValue}
+                              disabled={!editing}
+                              onChange={(e) => setGradeDraft((prev) => ({ ...prev, [sub.id]: { ...(prev[sub.id] || {}), grade: e.target.value } }))}
+                              className={`ws-input w-28 ${!editing ? 'bg-slate-50 text-slate-600' : ''}`}
                             />
                             <input
                               type="text"
                               placeholder="Feedback (optional)"
-                              defaultValue={sub.feedback ?? ''}
-                              onChange={(e) => setGradeDraft({ ...gradeDraft, [sub.id]: { ...draft, feedback: e.target.value } })}
-                              className="ws-input flex-1 min-w-[140px]"
+                              value={feedbackValue}
+                              disabled={!editing}
+                              onChange={(e) => setGradeDraft((prev) => ({ ...prev, [sub.id]: { ...(prev[sub.id] || {}), feedback: e.target.value } }))}
+                              className={`ws-input flex-1 min-w-[140px] ${!editing ? 'bg-slate-50 text-slate-600' : ''}`}
                             />
-                            <button onClick={() => handleGrade(sub)} className="ws-btn-secondary text-[12px] px-2.5 py-1.5">
-                              Save
-                            </button>
+                            {editing ? (
+                              <button onClick={() => handleGrade(sub)} className="ws-btn-primary text-[12px] px-2.5 py-1.5">
+                                <Save className="w-3.5 h-3.5" /> Save
+                              </button>
+                            ) : (
+                              <button onClick={() => setEditMode((prev) => ({ ...prev, [sub.id]: true }))} className="ws-btn-secondary text-[12px] px-2.5 py-1.5">
+                                <Edit2 className="w-3.5 h-3.5" /> Edit
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
