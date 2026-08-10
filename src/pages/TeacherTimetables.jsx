@@ -436,7 +436,12 @@ export default function TeacherTimetables() {
               const dateKey = date ? toDateKey(date) : null;
               const isToday = date && isSameDay(date, now);
               const dayEvents = dateKey ? eventsForDate(dateKey) : [];
-              const solidBg = day && dayEvents.length > 0 ? resolveCellSolid(dayEvents) : '';
+              const solidBg = isToday
+                ? 'bg-primary-600'
+                : day && dayEvents.length > 0
+                  ? resolveCellSolid(dayEvents)
+                  : '';
+              const colored = day && (isToday || !!solidBg);
 
               return (
                 <div
@@ -444,12 +449,12 @@ export default function TeacherTimetables() {
                   onClick={() => day && openDate(day)}
                   className={`min-h-[100px] border-r border-b border-slate-100 last:border-r-0 p-2 ${
                     day ? 'cursor-pointer hover:brightness-[0.98]' : ''
-                  } ${solidBg || (isToday ? 'bg-primary-50/40' : '')}`}
+                  } ${isToday ? 'bg-primary-600' : solidBg}`}
                 >
                   {day && (
                     <>
                       <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[13px] font-semibold ${
-                        isToday ? 'bg-primary-600 text-white' : solidBg ? 'text-white' : 'text-slate-700'
+                        colored ? 'text-white' : 'text-slate-700'
                       }`}>
                         {day}
                       </span>
@@ -458,7 +463,7 @@ export default function TeacherTimetables() {
                           <div
                             key={e.id}
                             className={`text-[10px] font-medium px-1.5 py-0.5 rounded border truncate ${
-                              solidBg
+                              colored
                                 ? 'bg-white/80 text-slate-800 border-white/60'
                                 : resolveEventStyle(e).light
                             }`}
@@ -468,7 +473,7 @@ export default function TeacherTimetables() {
                           </div>
                         ))}
                         {dayEvents.length > 3 && (
-                          <p className={`text-[10px] font-medium ${solidBg ? 'text-white' : 'text-slate-400'}`}>
+                          <p className={`text-[10px] font-medium ${colored ? 'text-white' : 'text-slate-400'}`}>
                             +{dayEvents.length - 3} more
                           </p>
                         )}
