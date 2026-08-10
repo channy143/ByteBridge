@@ -402,7 +402,7 @@ export default function TeacherDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* My Subjects */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="ws-card">
+          <div className="ws-card h-full flex flex-col">
             <div className="ws-card-header">
               <h2 className="ws-section-title">My Subjects</h2>
               {subjects.length > 0 && (
@@ -414,6 +414,7 @@ export default function TeacherDashboard() {
                 </button>
               )}
             </div>
+            <div className="flex-1 min-h-0 overflow-y-auto">
             {loading ? (
               <div className="p-4 space-y-3">
                 {Array.from({ length: 2 }).map((_, i) => (
@@ -468,6 +469,7 @@ export default function TeacherDashboard() {
                 ))}
               </div>
             )}
+            </div>
           </div>
         </div>
 
