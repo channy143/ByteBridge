@@ -59,6 +59,7 @@ export default function AdminTeacherDetail() {
   const teacherAssignments = assignments.filter((a) => a.teacher_id === teacher.id);
 
   const openEdit = () => {
+    setResetOpen(false);
     setForm({
       full_name: teacher.full_name || '',
       email: teacher.email || '',
@@ -151,7 +152,7 @@ export default function AdminTeacherDetail() {
           </div>
           <div className="flex items-center gap-2">
             <button onClick={openEdit} className="ws-btn-secondary"><Pencil className="w-4 h-4" /> Edit</button>
-            <button onClick={() => setResetOpen(true)} className="ws-btn-secondary"><KeyRound className="w-4 h-4" /> Reset Password</button>
+            <button onClick={() => { setEditOpen(false); setResetOpen(true); }} className="ws-btn-secondary"><KeyRound className="w-4 h-4" /> Reset Password</button>
             {active ? (
               <button onClick={toggleStatus} className="ws-btn-secondary text-red-600 border-red-200 hover:bg-red-50"><ShieldOff className="w-4 h-4" /> Deactivate</button>
             ) : (

@@ -581,7 +581,7 @@ export default function TeacherTimetables() {
             </div>
             <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 space-y-2">
               <button
-                onClick={() => setCreateOpen(true)}
+                onClick={() => { setDetailOpen(false); setCreateOpen(true); }}
                 className="w-full ws-btn-primary justify-center"
               >
                 <Plus className="w-4 h-4" /> Add

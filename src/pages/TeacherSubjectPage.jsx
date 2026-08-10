@@ -77,9 +77,18 @@ export default function TeacherSubjectPage() {
   const [annSaving, setAnnSaving] = useState(false);
 
   // Schedule modal
-  const [scheduleModal, setScheduleModal] = useState(false);
+const [scheduleModal, setScheduleModal] = useState(false);
   const [scheduleForm, setScheduleForm] = useState({ title: '', starts_at: '', ends_at: '' });
   const [scheduleSaving, setScheduleSaving] = useState(false);
+
+  const closeAllModals = () => {
+    setModuleModal(null);
+    setMaterialModal(null);
+    setActivityModal(false);
+    setReviewId(null);
+    setAnnModal(false);
+    setScheduleModal(false);
+  };
 
   const fetchAll = async () => {
     setLoading(true);
@@ -184,7 +193,8 @@ useEffect(() => {
 
   // --- Modules -------------------------------------------------------------
 
-  const openModuleModal = (mode, mod = null) => {
+const openModuleModal = (mode, mod = null) => {
+    closeAllModals();
     setModuleModal({ mode, id: mod?.id || null });
     setModuleForm({
       title: mode === 'edit' ? mod.title : '',
@@ -656,7 +666,7 @@ useEffect(() => {
                         </div>
                       );
                     })}
-                    <button onClick={() => setMaterialModal(m.id)} className="text-[12px] font-medium text-primary-600 hover:text-primary-700 inline-flex items-center gap-1">
+                    <button onClick={() => { closeAllModals(); setMaterialModal(m.id); }} className="text-[12px] font-medium text-primary-600 hover:text-primary-700 inline-flex items-center gap-1">
                       <Plus className="w-3.5 h-3.5" /> Add material
                     </button>
                   </div>
@@ -670,7 +680,7 @@ useEffect(() => {
       {tab === 'activities' && (
         <div className="space-y-3">
           <div className="flex justify-end">
-            <button onClick={() => setActivityModal(true)} className="ws-btn-primary">
+            <button onClick={() => { closeAllModals(); setActivityModal(true); }} className="ws-btn-primary">
               <Plus className="w-4 h-4" /> Create Activity
             </button>
           </div>
@@ -711,7 +721,7 @@ useEffect(() => {
                         </button>
                       </div>
                     </div>
-                    <button onClick={() => setReviewId(a.id)} className="mt-3 w-full ws-btn-secondary">
+                    <button onClick={() => { closeAllModals(); setReviewId(a.id); }} className="mt-3 w-full ws-btn-secondary">
                       <Inbox className="w-4 h-4" /> Review Submissions
                     </button>
                   </div>
@@ -768,7 +778,7 @@ useEffect(() => {
       {tab === 'announcements' && (
         <div className="space-y-3">
           <div className="flex justify-end">
-            <button onClick={() => setAnnModal(true)} className="ws-btn-primary">
+            <button onClick={() => { closeAllModals(); setAnnModal(true); }} className="ws-btn-primary">
               <Plus className="w-4 h-4" /> New Announcement
             </button>
           </div>
@@ -860,7 +870,7 @@ useEffect(() => {
             <button onClick={() => navigate(`/classroom?subject=${subjectId}`)} className="ws-btn-primary">
               <Video className="w-4 h-4" /> Start Live Class
             </button>
-            <button onClick={() => setScheduleModal(true)} className="ws-btn-secondary">
+            <button onClick={() => { closeAllModals(); setScheduleModal(true); }} className="ws-btn-secondary">
               <CalendarClock className="w-4 h-4" /> Schedule Class
             </button>
           </div>

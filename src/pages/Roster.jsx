@@ -321,7 +321,9 @@ export default function RosterAndDockets() {
     openActivity(selected);
   };
 
-  const fetchRegisteredStudents = async () => {
+const fetchRegisteredStudents = async () => {
+    setShowCreate(false);
+    setSelected(null);
     if (registeredStudents.length > 0) {
       setShowRoster(!showRoster);
       return;
@@ -360,7 +362,7 @@ export default function RosterAndDockets() {
               <button onClick={fetchRegisteredStudents} className="ws-btn-secondary">
                 <Users className="w-4 h-4" /> Class Roster
               </button>
-              <button onClick={() => setShowCreate(true)} className="ws-btn-primary">
+<button onClick={() => { setShowRoster(false); setSelected(null); setShowCreate(true); }} className="ws-btn-primary">
                 <Plus className="w-4 h-4" /> Create Activity
               </button>
             </>
@@ -549,7 +551,7 @@ export default function RosterAndDockets() {
             description={isTeacher
               ? "You haven't created any activities yet."
               : "Try adjusting your filters, or you're all caught up."}
-            action={isTeacher ? <button onClick={() => setShowCreate(true)} className="ws-btn-primary"><Plus className="w-4 h-4" /> Create Activity</button> : null}
+            action={isTeacher ? <button onClick={() => { setShowRoster(false); setSelected(null); setShowCreate(true); }} className="ws-btn-primary"><Plus className="w-4 h-4" /> Create Activity</button> : null}
           />
         ) : (
           <div className="overflow-x-auto">
