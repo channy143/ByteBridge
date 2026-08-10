@@ -35,6 +35,10 @@ const eventDot = (e) => {
   return custom ? custom.dot : EVENT_DOT[e.type];
 };
 
+// The cell dot follows the event type (Scheduled/Deadline/Live); the
+// teacher-selected color is reserved for the date cell background.
+const eventDotType = (e) => EVENT_DOT[e.type] || '';
+
 const resolveCellSolid = (evts) => {
   if (!evts.length) return '';
   const custom = evts.find((e) => e.color && getColorById(e.color));
@@ -557,7 +561,7 @@ export default function TeacherDashboard() {
                                 {hasEvents && (
                                   <div className="flex items-center gap-0.5 mt-0.5">
                                     {dayEvents.slice(0, 3).map((e) => (
-                                      <span key={e.id} className="w-1.5 h-1.5 rounded-full bg-white/80" />
+                                      <span key={e.id} className={`w-1.5 h-1.5 rounded-full ring-2 ring-white ${eventDotType(e)}`} />
                                     ))}
                                   </div>
                                 )}

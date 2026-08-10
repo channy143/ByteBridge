@@ -37,6 +37,11 @@ export function AuthProvider({ children }) {
       const currentUser = session?.user ?? null;
 
       if (currentUser) {
+        // A silent token refresh fires whenever a tab regains focus. The user
+        // identity is identical, so ignore it entirely -- setting a new user
+        // object here hands every page a fresh identity and re-renders them.
+        if (event === 'TOKEN_REFRESHED') return;
+
         setUser(currentUser);
         if (!bootedRef.current) {
           // Initial boot (or a sign-in racing it): hold the loading state until

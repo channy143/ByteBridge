@@ -33,23 +33,21 @@ const CALENDAR_COLORS = [
 
 const getColorById = (id) => CALENDAR_COLORS.find((c) => c.id === id) || null;
 
-const EVENT_BG = {
-  schedule: 'bg-blue-50',
-  deadline: 'bg-amber-50',
-  live: 'bg-emerald-50',
-};
-
 const EVENT_PRIORITY = ['live', 'schedule', 'deadline'];
 
-const resolveCellBg = (evts) => {
+const resolveCellSolid = (evts) => {
   if (!evts.length) return '';
   const custom = evts.find((e) => e.color && getColorById(e.color));
-  if (custom) return getColorById(custom.color).cellBg;
+  if (custom) return getColorById(custom.color).bg;
   for (const t of EVENT_PRIORITY) {
-    if (evts.some((e) => e.type === t)) return EVENT_BG[t];
+    if (evts.some((e) => e.type === t)) return EVENT_COLORS[t].dot;
   }
   return '';
 };
+
+// The dot color always follows the event type (Scheduled/Deadline/Live).
+// The teacher-selected color is reserved for the date cell background.
+const typeDot = (e) => EVENT_COLORS[e.type]?.dot || '';
 
 const resolveEventStyle = (e) => {
   const custom = getColorById(e.color);
@@ -438,6 +436,7 @@ export default function TeacherTimetables() {
               const dateKey = date ? toDateKey(date) : null;
               const isToday = date && isSameDay(date, now);
               const dayEvents = dateKey ? eventsForDate(dateKey) : [];
+              const solidBg = day && dayEvents.length > 0 ? resolveCellSolid(dayEvents) : '';
 
               return (
                 <div
@@ -445,29 +444,33 @@ export default function TeacherTimetables() {
                   onClick={() => day && openDate(day)}
                   className={`min-h-[100px] border-r border-b border-slate-100 last:border-r-0 p-2 ${
                     day ? 'cursor-pointer hover:brightness-[0.98]' : ''
-                  } ${day ? (resolveCellBg(dayEvents) || (isToday ? 'bg-primary-50/40' : '')) : ''}`}
+                  } ${solidBg || (isToday ? 'bg-primary-50/40' : '')}`}
                 >
                   {day && (
                     <>
                       <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[13px] font-semibold ${
-                        isToday ? 'bg-primary-600 text-white' : 'text-slate-700'
+                        isToday ? 'bg-primary-600 text-white' : solidBg ? 'text-white' : 'text-slate-700'
                       }`}>
                         {day}
                       </span>
                       <div className="mt-1 space-y-1">
-                        {dayEvents.slice(0, 3).map((e) => {
-                          const style = resolveEventStyle(e);
-                          return (
-                            <div
-                              key={e.id}
-                              className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${style.light} truncate`}
-                            >
-                              {e.title}
-                            </div>
-                          );
-                        })}
+                        {dayEvents.slice(0, 3).map((e) => (
+                          <div
+                            key={e.id}
+                            className={`text-[10px] font-medium px-1.5 py-0.5 rounded border truncate ${
+                              solidBg
+                                ? 'bg-white/80 text-slate-800 border-white/60'
+                                : resolveEventStyle(e).light
+                            }`}
+                          >
+                            <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle ${typeDot(e)}`} />
+                            {e.title}
+                          </div>
+                        ))}
                         {dayEvents.length > 3 && (
-                          <p className="text-[10px] text-slate-400 font-medium">+{dayEvents.length - 3} more</p>
+                          <p className={`text-[10px] font-medium ${solidBg ? 'text-white' : 'text-slate-400'}`}>
+                            +{dayEvents.length - 3} more
+                          </p>
                         )}
                       </div>
                     </>
@@ -499,7 +502,7 @@ export default function TeacherTimetables() {
                   : null;
                 return (
                   <div key={e.id} className="px-5 py-3 flex items-center gap-3">
-                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${style.dot}`} />
+                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${typeDot(e)}`} />
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold text-slate-800 truncate">{e.title}</p>
                       <p className="text-[11px] text-slate-400">{style.label} · {subjectName(e.subject_id)}</p>
@@ -552,7 +555,7 @@ export default function TeacherTimetables() {
                     : null;
                   return (
                     <div key={e.id} className="px-5 py-3.5 flex items-start gap-3">
-                      <span className={`mt-0.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${style.dot}`} />
+                      <span className={`mt-0.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${typeDot(e)}`} />
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] font-semibold text-slate-800">{e.title}</p>
                         <p className="text-[11.5px] text-slate-400 mt-0.5">
