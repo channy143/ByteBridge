@@ -22,8 +22,29 @@ const EVENT_BG = {
 };
 
 const EVENT_PRIORITY = ['live', 'schedule', 'deadline'];
-const eventBg = (evts) => {
+
+const CALENDAR_COLORS = [
+  { id: 'blue', label: 'Blue', dot: 'bg-blue-500', cellBg: 'bg-blue-50' },
+  { id: 'amber', label: 'Amber', dot: 'bg-amber-500', cellBg: 'bg-amber-50' },
+  { id: 'emerald', label: 'Emerald', dot: 'bg-emerald-500', cellBg: 'bg-emerald-50' },
+  { id: 'rose', label: 'Rose', dot: 'bg-rose-500', cellBg: 'bg-rose-50' },
+  { id: 'violet', label: 'Violet', dot: 'bg-violet-500', cellBg: 'bg-violet-50' },
+  { id: 'sky', label: 'Sky', dot: 'bg-sky-500', cellBg: 'bg-sky-50' },
+  { id: 'orange', label: 'Orange', dot: 'bg-orange-500', cellBg: 'bg-orange-50' },
+  { id: 'lime', label: 'Lime', dot: 'bg-lime-500', cellBg: 'bg-lime-50' },
+];
+
+const getColorById = (id) => CALENDAR_COLORS.find((c) => c.id === id) || null;
+
+const eventDot = (e) => {
+  const custom = getColorById(e.color);
+  return custom ? custom.dot : EVENT_DOT[e.type];
+};
+
+const resolveCellBg = (evts) => {
   if (!evts.length) return '';
+  const custom = evts.find((e) => e.color && getColorById(e.color));
+  if (custom) return getColorById(custom.color).cellBg;
   for (const t of EVENT_PRIORITY) {
     if (evts.some((e) => e.type === t)) return EVENT_BG[t];
   }
@@ -137,13 +158,13 @@ export default function TeacherDashboard() {
           const [{ data: scheds }, { data: acts }, { data: sessions }] = await Promise.all([
             supabase
               .from('class_schedules')
-              .select('id, subject_id, title, starts_at, ends_at')
+              .select('id, subject_id, title, starts_at, ends_at, color')
               .in('subject_id', subjectIds)
               .gte('ends_at', threeMonthsAgo.toISOString())
               .lte('starts_at', sixMonthsAhead.toISOString()),
             supabase
               .from('activities')
-              .select('id, subject_id, title, deadline')
+              .select('id, subject_id, title, deadline, color')
               .in('subject_id', subjectIds)
               .not('deadline', 'is', null)
               .gte('deadline', threeMonthsAgo.toISOString())
@@ -160,10 +181,12 @@ export default function TeacherDashboard() {
             ...(scheds || []).map((s) => ({
               id: `sch-${s.id}`, type: 'schedule', title: s.title,
               subject_id: s.subject_id, start: s.starts_at, end: s.ends_at,
+              color: s.color || '',
             })),
             ...(acts || []).map((a) => ({
               id: `act-${a.id}`, type: 'deadline', title: a.title,
               subject_id: a.subject_id, deadline: a.deadline, start: a.deadline,
+              color: a.color || '',
             })),
             ...(sessions || []).map((s) => ({
               id: `ses-${s.id}`, type: 'live',
@@ -394,7 +417,7 @@ export default function TeacherDashboard() {
                       <div
                         key={i}
                         onClick={() => hasEvents && openDate(day)}
-                        className={`flex flex-col items-center py-1.5 rounded-md ${hasEvents ? 'cursor-pointer' : ''} ${hasEvents ? eventBg(dayEvents) : ''}`}
+                        className={`flex flex-col items-center py-1.5 rounded-md ${hasEvents ? 'cursor-pointer' : ''} ${hasEvents ? resolveCellBg(dayEvents) : ''}`}
                       >
                         {day ? (
                           <>
@@ -412,7 +435,7 @@ export default function TeacherDashboard() {
                             {hasEvents && (
                               <div className="flex items-center gap-0.5 mt-0.5">
                                 {dayEvents.slice(0, 3).map((e) => (
-                                  <span key={e.id} className={`w-1.5 h-1.5 rounded-full ${EVENT_DOT[e.type]}`} />
+                                  <span key={e.id} className={`w-1.5 h-1.5 rounded-full ${eventDot(e)}`} />
                                 ))}
                               </div>
                             )}
@@ -476,7 +499,7 @@ export default function TeacherDashboard() {
                   : null;
                 return (
                   <div key={e.id} className="px-5 py-3.5 flex items-start gap-3">
-                    <span className={`mt-0.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${EVENT_DOT[e.type]}`} />
+                    <span className={`mt-0.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${eventDot(e)}`} />
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold text-slate-800">{e.title}</p>
                       <p className="text-[11.5px] text-slate-400 mt-0.5">
