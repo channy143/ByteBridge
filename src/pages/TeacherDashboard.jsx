@@ -112,10 +112,11 @@ export default function TeacherDashboard() {
         let activityIds = [];
 
         if (subjectIds.length > 0) {
-          const { data: enr } = await supabase
+          const { data: enr, error: enrErr } = await supabase
             .from('enrollments')
             .select('subject_id')
             .in('subject_id', subjectIds);
+          if (enrErr) console.error('Error counting enrolled students (overview):', enrErr);
           (enr || []).forEach((e) => { counts.students[e.subject_id] = (counts.students[e.subject_id] || 0) + 1; });
 
           const { data: mods } = await supabase
