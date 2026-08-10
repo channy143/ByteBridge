@@ -537,7 +537,7 @@ export default function TeacherDashboard() {
                           <div
                             key={i}
                             data-cal-day={day || undefined}
-                            className={`flex flex-col items-center py-1.5 rounded-md ${
+                            className={`flex flex-col items-center py-1.5 ${
                               isToday
                                 ? 'bg-primary-600 text-white cursor-pointer'
                                 : solidBg
