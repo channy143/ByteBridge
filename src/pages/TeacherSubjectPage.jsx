@@ -133,12 +133,13 @@ const [scheduleModal, setScheduleModal] = useState(false);
       setAnnouncements(anns || []);
       setSchedules(scheds || []);
 
-      const studentIds = (enr || []).map((e) => e.student_id);
+const studentIds = (enr || []).map((e) => e.student_id);
       if (studentIds.length > 0) {
         const { data: st } = await supabase
-          .from('students')
+          .from('profiles')
           .select('id, student_id, full_name')
-          .in('id', studentIds);
+          .in('id', studentIds)
+          .eq('role', 'student');
         const list = st || [];
 
         const modIds = (mods || []).map((m) => m.id);
