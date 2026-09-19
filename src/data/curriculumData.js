@@ -652,12 +652,11 @@ export function getGradeBadge(grade, status) {
   return { label: 'To Take', tone: 'bg-slate-50 text-slate-600 border-slate-200' };
 }
 
-// Check whether all prerequisites are met for a subject given the student's passed subject codes
-export function arePrerequisitesMet(prerequisitesString, passedSubjectCodes) {
+// Check whether all prerequisites are met for a subject given the student's passed subject codes and waived codes
+export function arePrerequisitesMet(prerequisitesString, passedSubjectCodes = new Set(), waivedSubjectCodes = new Set()) {
   if (!prerequisitesString || prerequisitesString.trim() === '' || prerequisitesString.toLowerCase() === 'none') {
     return true;
   }
-  // Split by comma or semicolon
   const reqs = prerequisitesString
     .split(/[,;/]/)
     .map((s) => s.trim().toUpperCase())
@@ -665,21 +664,227 @@ export function arePrerequisitesMet(prerequisitesString, passedSubjectCodes) {
 
   if (reqs.length === 0) return true;
 
-  // Each prerequisite code must be present in passedSubjectCodes
+  // Each prerequisite code must be present in passedSubjectCodes or waived
   return reqs.every((reqCode) => {
-    // Exact or normalized match
-    return passedSubjectCodes.has(reqCode);
+    return passedSubjectCodes.has(reqCode) || waivedSubjectCodes.has(reqCode);
   });
 }
 
+// Explains prerequisite status for tooltips
+export function getPrerequisiteDetails(prerequisitesString, passedSubjectCodes = new Set(), waivedSubjectCodes = new Set(), enrollmentsMap = new Map()) {
+  if (!prerequisitesString || prerequisitesString.trim() === '' || prerequisitesString.toLowerCase() === 'none') {
+    return { isMet: true, missing: [], message: 'No prerequisite requirements for this subject.' };
+  }
+
+  const reqs = prerequisitesString
+    .split(/[,;/]/)
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean);
+
+  const missing = [];
+  const details = [];
+
+  reqs.forEach((code) => {
+    if (waivedSubjectCodes.has(code)) {
+      details.push(`${code} (Waived by Dean/Adviser)`);
+    } else if (passedSubjectCodes.has(code)) {
+      details.push(`${code} (Passed)`);
+    } else {
+      const enr = enrollmentsMap.get(code);
+      if (enr?.completion_status === 'Failed' || (enr?.grade && Number(enr.grade) > 3.0)) {
+        details.push(`${code} (Failed - Needs Retake)`);
+      } else if (enr?.completion_status === 'Enrolled') {
+        details.push(`${code} (Currently Enrolled)`);
+      } else {
+        details.push(`${code} (Not Yet Taken)`);
+      }
+      missing.push(code);
+    }
+  });
+
+  const isMet = missing.length === 0;
+  const message = isMet
+    ? `All prerequisites satisfied: ${details.join(', ')}`
+    : `Requires passing: ${details.join(', ')}`;
+
+  return { isMet, missing, details, message };
+}
+
+// Sample student profiles for Advising mode
+export const DEFAULT_SAMPLE_STUDENTS = [
+  {
+    id: 'sample-student-1',
+    student_id: '2024-0001',
+    full_name: 'Juan Dela Cruz',
+    course_year_section: 'BTLED ICT 2-A',
+    program: 'BTLED-ICT',
+    year_level: '2',
+    enrollments: [
+      // Year 1 Sem 1 - Passed
+      { subject_code: 'GE 1', grade: '1.25', completion_status: 'Passed' },
+      { subject_code: 'GE 2', grade: '1.50', completion_status: 'Passed' },
+      { subject_code: 'GE 4', grade: '1.75', completion_status: 'Passed' },
+      { subject_code: 'BTLED 101', grade: '1.50', completion_status: 'Passed' },
+      { subject_code: 'ICT 101', grade: '1.25', completion_status: 'Passed' },
+      { subject_code: 'PE 1', grade: '1.00', completion_status: 'Passed' },
+      { subject_code: 'NSTP 1', grade: '1.25', completion_status: 'Passed' },
+      // Year 1 Sem 2 - Passed
+      { subject_code: 'GE 3', grade: '1.50', completion_status: 'Passed' },
+      { subject_code: 'GE 5', grade: '1.25', completion_status: 'Passed' },
+      { subject_code: 'GE 6', grade: '1.75', completion_status: 'Passed' },
+      { subject_code: 'ICT 102', grade: '1.50', completion_status: 'Passed' },
+      { subject_code: 'ICT 103', grade: '1.25', completion_status: 'Passed' },
+      { subject_code: 'PE 2', grade: '1.00', completion_status: 'Passed' },
+      { subject_code: 'NSTP 2', grade: '1.25', completion_status: 'Passed' },
+      // Year 2 Sem 1 - Currently Enrolled
+      { subject_code: 'GE 7', grade: null, completion_status: 'Enrolled' },
+      { subject_code: 'GE 8', grade: null, completion_status: 'Enrolled' },
+      { subject_code: 'ICT 201', grade: null, completion_status: 'Enrolled' },
+      { subject_code: 'ICT 202', grade: null, completion_status: 'Enrolled' },
+      { subject_code: 'EDUC 101', grade: null, completion_status: 'Enrolled' },
+      { subject_code: 'PE 3', grade: null, completion_status: 'Enrolled' },
+    ],
+  },
+  {
+    id: 'sample-student-2',
+    student_id: '2024-0042',
+    full_name: 'Maria Santos',
+    course_year_section: 'BTLED ICT 3-B',
+    program: 'BTLED-ICT',
+    year_level: '3',
+    enrollments: [
+      // Year 1 Passed
+      { subject_code: 'GE 1', grade: '1.50', completion_status: 'Passed' },
+      { subject_code: 'GE 2', grade: '1.75', completion_status: 'Passed' },
+      { subject_code: 'GE 4', grade: '2.00', completion_status: 'Passed' },
+      { subject_code: 'BTLED 101', grade: '1.50', completion_status: 'Passed' },
+      { subject_code: 'ICT 101', grade: '1.75', completion_status: 'Passed' },
+      { subject_code: 'PE 1', grade: '1.25', completion_status: 'Passed' },
+      { subject_code: 'NSTP 1', grade: '1.25', completion_status: 'Passed' },
+      { subject_code: 'GE 3', grade: '1.50', completion_status: 'Passed' },
+      { subject_code: 'GE 5', grade: '1.75', completion_status: 'Passed' },
+      { subject_code: 'GE 6', grade: '1.50', completion_status: 'Passed' },
+      { subject_code: 'ICT 102', grade: '2.00', completion_status: 'Passed' },
+      { subject_code: 'ICT 103', grade: '1.75', completion_status: 'Passed' },
+      { subject_code: 'PE 2', grade: '1.25', completion_status: 'Passed' },
+      { subject_code: 'NSTP 2', grade: '1.25', completion_status: 'Passed' },
+      // Year 2 Sem 1 Passed
+      { subject_code: 'GE 7', grade: '1.75', completion_status: 'Passed' },
+      { subject_code: 'GE 8', grade: '1.50', completion_status: 'Passed' },
+      { subject_code: 'ICT 201', grade: '2.25', completion_status: 'Passed' },
+      { subject_code: 'ICT 202', grade: '2.00', completion_status: 'Passed' },
+      { subject_code: 'EDUC 101', grade: '1.50', completion_status: 'Passed' },
+      { subject_code: 'PE 3', grade: '1.00', completion_status: 'Passed' },
+      // Year 2 Sem 2 - Failed ICT 203 (DBMS)! Locks ICT 301 (Systems Analysis & Design)
+      { subject_code: 'GE 9', grade: '1.75', completion_status: 'Passed' },
+      { subject_code: 'ICT 203', grade: '5.00', completion_status: 'Failed' },
+      { subject_code: 'ICT 204', grade: '1.75', completion_status: 'Passed' },
+      { subject_code: 'EDUC 102', grade: '1.50', completion_status: 'Passed' },
+      { subject_code: 'EDUC 103', grade: '1.75', completion_status: 'Passed' },
+      { subject_code: 'PE 4', grade: '1.25', completion_status: 'Passed' },
+    ],
+  },
+];
+
+// Master Template Faculty Coordinators
+export const DEFAULT_FACULTY_COORDINATORS = {
+  'GE 1': { name: 'Prof. Eleanor Ramos', title: 'General Education Faculty' },
+  'GE 2': { name: 'Prof. Mark Bautista', title: 'Social Sciences Dept' },
+  'GE 4': { name: 'Dr. Anita Villanueva', title: 'Mathematics Faculty' },
+  'BTLED 101': { name: 'Dr. Carmen Mendoza', title: 'BTLED Department Chair' },
+  'ICT 101': { name: 'Engr. Ronald Reyes, MIT', title: 'ICT Specialization Coordinator' },
+  'PE 1': { name: 'Coach Aris Dela Cruz', title: 'Physical Education Dept' },
+  'NSTP 1': { name: 'Capt. Joel Tan', title: 'NSTP Facilitator' },
+  'GE 3': { name: 'Prof. Mark Bautista', title: 'Social Sciences Dept' },
+  'GE 5': { name: 'Prof. Eleanor Ramos', title: 'Languages Faculty' },
+  'GE 6': { name: 'Prof. Marco Antonio', title: 'Humanities Dept' },
+  'ICT 102': { name: 'Engr. Ronald Reyes, MIT', title: 'Hardware Systems Instructor' },
+  'ICT 103': { name: 'Prof. Kevin Soriano, MSCS', title: 'Programming Coordinator' },
+  'PE 2': { name: 'Coach Aris Dela Cruz', title: 'Physical Education Dept' },
+  'NSTP 2': { name: 'Capt. Joel Tan', title: 'NSTP Facilitator' },
+  'GE 7': { name: 'Prof. Mark Bautista', title: 'General Education Faculty' },
+  'GE 8': { name: 'Prof. Eleanor Ramos', title: 'Philosophy & Ethics Dept' },
+  'ICT 201': { name: 'Prof. Kevin Soriano, MSCS', title: 'Algorithms Coordinator' },
+  'ICT 202': { name: 'Engr. D. Dimagiba, CCNA', title: 'Networking Lab Instructor' },
+  'EDUC 101': { name: 'Dr. Carmen Mendoza', title: 'Professional Education Chair' },
+  'PE 3': { name: 'Coach Aris Dela Cruz', title: 'Physical Education Dept' },
+  'GE 9': { name: 'Prof. Mark Bautista', title: 'Social Sciences Dept' },
+  'ICT 203': { name: 'Prof. Grace Alcantara, MIT', title: 'Database Lead Instructor' },
+  'ICT 204': { name: 'Prof. Kevin Soriano, MSCS', title: 'Web Development Lead' },
+  'EDUC 102': { name: 'Dr. Anita Villanueva', title: 'Prof. Education Faculty' },
+  'EDUC 103': { name: 'Dr. Carmen Mendoza', title: 'Curriculum Specialist' },
+  'PE 4': { name: 'Coach Aris Dela Cruz', title: 'Physical Education Dept' },
+  'ICT 301': { name: 'Prof. Grace Alcantara, MIT', title: 'Systems Analysis Lead' },
+  'ICT 302': { name: 'Prof. Marco Antonio, MGD', title: 'Digital Media Specialist' },
+  'EDUC 104': { name: 'Dr. Anita Villanueva', title: 'Assessment Specialist' },
+  'EDUC 105': { name: 'Dr. Carmen Mendoza', title: 'Educational Pedagogy Chair' },
+  'BTLED 201': { name: 'Prof. Kevin Soriano, MSCS', title: 'Educational Technology Lead' },
+  'ICT 303': { name: 'Engr. D. Dimagiba, CCNA', title: 'Information Security Lead' },
+  'ICT 304': { name: 'Prof. Kevin Soriano, MSCS', title: 'Mobile Computing Lead' },
+  'EDUC 106': { name: 'Dr. Anita Villanueva', title: 'Assessment Specialist' },
+  'EDUC 107': { name: 'Dr. Carmen Mendoza', title: 'Literacies Specialist' },
+  'BTLED 301': { name: 'Prof. Kevin Soriano, MSCS', title: 'Educational Technology Lead' },
+  'ICT 401': { name: 'Research & Capstone Committee', title: 'Thesis Review Board' },
+  'EDUC 108': { name: 'Field Study Supervisors', title: 'Laboratory School Dept' },
+  'EDUC 109': { name: 'Field Study Supervisors', title: 'Laboratory School Dept' },
+  'ICT 402': { name: 'Research & Capstone Committee', title: 'Capstone Defense Panel' },
+  'EDUC 110': { name: 'Dean of College of Education', title: 'Internship Director' },
+};
+
+export const DEFAULT_SYLLABI_INFO = {
+  version: '2025-2026 Rev. 4',
+  status: 'Approved OBE Format',
+  last_updated: 'August 2025',
+  accreditation: 'AACCUP Level II Re-Accredited',
+};
+
+// Macro Analytics for Master Template mode
+export function getCurriculumMacroAnalytics(subjectsList = DEFAULT_BTLED_ICT_CURRICULUM) {
+  const totalCourses = subjectsList.length;
+  const totalUnits = subjectsList.reduce((acc, s) => acc + Number(s.units || 0), 0);
+  const totalLec = subjectsList.reduce((acc, s) => acc + Number(s.lec_units ?? s.units ?? 0), 0);
+  const totalLab = subjectsList.reduce((acc, s) => acc + Number(s.lab_units ?? 0), 0);
+
+  // Categories
+  const majorCount = subjectsList.filter((s) => s.category?.includes('Major') || s.category?.includes('Capstone')).length;
+  const profEdCount = subjectsList.filter((s) => s.category?.includes('Professional') || s.category?.includes('Experiential')).length;
+  const geCount = subjectsList.filter((s) => s.category?.includes('General') || s.category?.includes('Mandatory') || s.category?.includes('Physical')).length;
+
+  // Prerequisite bottleneck analysis
+  const dependentCountMap = new Map();
+  subjectsList.forEach((s) => {
+    if (s.prerequisites && s.prerequisites !== 'None') {
+      const parts = s.prerequisites.split(/[,;/]/).map((p) => p.trim().toUpperCase());
+      parts.forEach((p) => {
+        dependentCountMap.set(p, (dependentCountMap.get(p) || 0) + 1);
+      });
+    }
+  });
+
+  const bottlenecks = Array.from(dependentCountMap.entries())
+    .map(([code, count]) => ({ code, count }))
+    .sort((a, b) => b.count - a.count);
+
+  return {
+    totalCourses,
+    totalUnits,
+    totalLec,
+    totalLab,
+    majorCount,
+    profEdCount,
+    geCount,
+    bottlenecks,
+  };
+}
+
 // Compute comprehensive progress stats for a student
-export function computeStudentProgress(subjectsList = [], enrollmentsList = []) {
+export function computeStudentProgress(subjectsList = [], enrollmentsList = [], waivedCodes = new Set()) {
   const subjects = subjectsList.length > 0 ? subjectsList : DEFAULT_BTLED_ICT_CURRICULUM;
-  
+
   // Map enrollment by subject code or subject id
   const enrollmentByCode = new Map();
   const enrollmentById = new Map();
-  
+
   enrollmentsList.forEach((enr) => {
     if (enr.subject_id) enrollmentById.set(enr.subject_id, enr);
     if (enr.subject?.subject_code) enrollmentByCode.set(enr.subject.subject_code.toUpperCase(), enr);
@@ -695,11 +900,11 @@ export function computeStudentProgress(subjectsList = [], enrollmentsList = []) 
     const isPassed =
       enr.completion_status?.toLowerCase() === 'passed' ||
       (enr.grade != null && Number(enr.grade) > 0 && Number(enr.grade) <= 3.0);
-    
+
     if (isPassed) {
       if (enr.subject?.subject_code) passedCodes.add(enr.subject.subject_code.toUpperCase());
       if (enr.subject_code) passedCodes.add(enr.subject_code.toUpperCase());
-      
+
       const numGrade = Number(enr.grade);
       const units = Number(enr.subject?.units || enr.units || 3);
       if (!isNaN(numGrade) && numGrade > 0) {
@@ -726,6 +931,7 @@ export function computeStudentProgress(subjectsList = [], enrollmentsList = []) 
     let status = 'To Take';
     let grade = null;
     let enrollmentId = null;
+    const isWaived = waivedCodes.has(uCode);
 
     if (enr) {
       enrollmentId = enr.id;
@@ -744,13 +950,23 @@ export function computeStudentProgress(subjectsList = [], enrollmentsList = []) 
       }
     }
 
+    // If waived, unlock to Enrolled or Passed
+    if (isWaived) {
+      if (status !== 'Passed') {
+        status = 'Enrolled';
+      }
+      passedCodes.add(uCode);
+    }
+
     // If not passed/enrolled, check if prerequisites are locked
     if (status === 'To Take') {
-      const prereqsMet = arePrerequisitesMet(subj.prerequisites, passedCodes);
+      const prereqsMet = arePrerequisitesMet(subj.prerequisites, passedCodes, waivedCodes);
       if (!prereqsMet) {
         status = 'Locked';
       }
     }
+
+    const prereqInfo = getPrerequisiteDetails(subj.prerequisites, passedCodes, waivedCodes, enrollmentByCode);
 
     if (status === 'Passed') {
       passedUnits += units;
@@ -767,6 +983,8 @@ export function computeStudentProgress(subjectsList = [], enrollmentsList = []) 
       enrollmentId,
       status,
       grade,
+      isWaived,
+      prereqInfo,
     };
   });
 
@@ -797,3 +1015,4 @@ export function computeStudentProgress(subjectsList = [], enrollmentsList = []) 
     academicStanding,
   };
 }
+
