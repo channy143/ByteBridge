@@ -69,9 +69,9 @@ export default function AuthLayout({ children, showBack = false }) {
           z-index: 1;
         }
       `}</style>
-      <div className="min-h-screen flex bg-white">
-        {/* Left brand panel — desktop only */}
-        <div className="hidden lg:flex w-1/2 relative bg-primary-950 overflow-hidden">
+      <div className="min-h-screen lg:h-screen w-full flex bg-white lg:overflow-hidden">
+        {/* Left brand panel — desktop only, pinned and non-scrollable */}
+        <div className="hidden lg:flex w-1/2 h-full relative bg-primary-950 overflow-hidden flex-shrink-0 select-none">
           {/* Slideshow background */}
           <div className="absolute inset-0">
             {SLIDESHOW_IMAGES.map((img, i) => (
@@ -93,57 +93,57 @@ export default function AuthLayout({ children, showBack = false }) {
           <div className="absolute inset-0 z-[3]" style={{ background: 'linear-gradient(to left, rgba(2,6,23,0.7) 0%, transparent 50%)' }} />
 
           {/* Content */}
-          <div className="relative z-10 w-full h-full flex flex-col justify-center pl-[100px] xl:pl-[120px] pr-12 py-16">
+          <div className="relative z-10 w-full h-full flex flex-col justify-center pl-10 xl:pl-14 pr-8 py-10">
             {/* Brand */}
-            <div className="flex items-center mb-10">
-              <div className="h-11 w-11 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center backdrop-blur-sm">
-                <Layout className="h-6 w-6 text-white" />
+            <div className="flex items-center mb-6">
+              <div className="h-9 w-9 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center backdrop-blur-sm">
+                <Layout className="h-5 w-5 text-white" />
               </div>
-              <span className="ml-3 text-2xl font-extrabold tracking-tight text-white">ByteBridge</span>
+              <span className="ml-2.5 text-xl font-extrabold tracking-tight text-white">ByteBridge</span>
             </div>
 
             {/* Decorative accent line */}
-            <div className="w-12 h-[3px] bg-primary-400 rounded-full mb-7"></div>
+            <div className="w-10 h-[3px] bg-primary-400 rounded-full mb-5"></div>
 
-            <h1 className="text-4xl xl:text-5xl font-extrabold leading-[1.1] tracking-tight text-white max-w-md">
+            <h1 className="text-3xl xl:text-4xl font-extrabold leading-tight tracking-tight text-white max-w-sm">
               Bridging Learning
               <br />
               <span className="text-primary-300">with Technology</span>
             </h1>
 
-            <p className="mt-7 text-primary-100/80 text-base leading-relaxed max-w-sm">
+            <p className="mt-5 text-primary-100/80 text-[13.5px] leading-relaxed max-w-xs">
               An educational space for BTLED ICT students and teachers to learn, collaborate, and grow through technology.
             </p>
 
-            <p className="mt-4 text-xs uppercase tracking-[0.22em] text-primary-200/70">
+            <p className="mt-3 text-[11px] uppercase tracking-[0.2em] text-primary-200/70">
               Educational Portal for BTLED ICT Majors
             </p>
           </div>
         </div>
 
-        {/* Right auth panel */}
-        <div className="flex-1 flex flex-col min-h-screen">
+        {/* Right auth panel — independent scroll container */}
+        <div className="flex-1 flex flex-col min-h-screen lg:min-h-0 lg:h-full lg:overflow-y-auto">
           {/* Mobile brand header */}
-          <div className="lg:hidden flex items-center justify-between px-6 h-16 border-b border-slate-100">
+          <div className="lg:hidden flex items-center justify-between px-5 h-14 border-b border-slate-100 flex-shrink-0">
             <div className="flex items-center">
-              <div className="h-8 w-8 rounded-lg bg-primary-950 flex items-center justify-center">
-                <Layout className="h-4 w-4 text-white" />
+              <div className="h-7 w-7 rounded-lg bg-primary-950 flex items-center justify-center">
+                <Layout className="h-3.5 w-3.5 text-white" />
               </div>
-              <span className="ml-2 font-extrabold text-lg text-primary-950 tracking-tight">ByteBridge</span>
+              <span className="ml-2 font-extrabold text-base text-primary-950 tracking-tight">ByteBridge</span>
             </div>
             <span className="text-[10px] uppercase tracking-wider text-slate-400">BTLED ICT</span>
           </div>
 
-          <div className="flex-1 flex items-center justify-center px-6 sm:px-12 py-8">
-            <div className="w-full max-w-[440px]">
+          <div className="flex-1 flex flex-col justify-center px-5 sm:px-10 py-6 min-h-full">
+            <div className="w-full max-w-[400px] mx-auto my-auto">
               {showBack && (
                 <button
                   type="button"
                   onClick={() => navigate(-1)}
-                  className="mb-6 inline-flex items-center text-sm font-medium text-slate-500 hover:text-primary-900 transition-colors group"
+                  className="mb-4 inline-flex items-center text-xs font-medium text-slate-500 hover:text-primary-900 transition-colors group"
                   aria-label="Go back"
                 >
-                  <ArrowLeft className="w-4 h-4 mr-1.5 transition-transform group-hover:-translate-x-0.5" />
+                  <ArrowLeft className="w-3.5 h-3.5 mr-1 transition-transform group-hover:-translate-x-0.5" />
                   Back
                 </button>
               )}

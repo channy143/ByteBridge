@@ -21,11 +21,11 @@ export default function useAdminData() {
       ] = await Promise.all([
         supabase.from('profiles').select('id, full_name, email').eq('role', 'teacher').order('full_name'),
         supabase.from('teachers').select('id, teacher_id, full_name, status'),
-        supabase.from('subjects').select('id, subject_code, subject_title, description, program_id, year_level, semester, academic_year, units, status').order('subject_code'),
+        supabase.from('subjects').select('*').order('subject_code'),
         supabase.from('sections').select('id, name, program_id, year_level, academic_year, semester, adviser_id, status').order('name'),
         supabase.from('students').select('id, student_id, full_name, birthdate, program, year_level, status'),
         supabase.from('teacher_subjects').select('id, teacher_id, subject_id, section_id, academic_year, semester'),
-        supabase.from('enrollments').select('id, student_id, subject_id, section_id, academic_year, semester'),
+        supabase.from('enrollments').select('*'),
         supabase.from('programs').select('id, name, code, status').order('name'),
       ]);
 

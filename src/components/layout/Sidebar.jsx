@@ -16,19 +16,22 @@ import {
   ClipboardList,
   Settings,
   CalendarDays,
+  ScrollText,
 } from 'lucide-react';
 import Avatar from '../ui/Avatar';
 
 const STUDENT_LINKS = [
   { to: '/dashboard', label: 'Overview', icon: LayoutDashboard },
-  { to: '/roster', label: 'Roster & Dockets', icon: LayoutDashboard },
-  { to: '/announcements', label: 'Announcements', icon: LayoutDashboard },
+  { to: '/prospectus', label: 'Prospectus', icon: ScrollText },
+  { to: '/roster', label: 'Roster & Dockets', icon: ClipboardList },
+  { to: '/announcements', label: 'Announcements', icon: Megaphone },
   { to: '/materials', label: 'Subjects', icon: BookOpen },
   { to: '/classroom', label: 'Virtual Classroom', icon: Video },
 ];
 
 const TEACHER_LINKS = [
   { to: '/teacher/dashboard', label: 'Overview', icon: LayoutDashboard },
+  { to: '/prospectus', label: 'Prospectus', icon: ScrollText },
   { to: '/teacher/timetables', label: 'Timetables', icon: CalendarDays },
   { to: '/teacher/subjects', label: 'My Subjects', icon: BookOpen },
   { to: '/roster', label: 'Activities', icon: ClipboardList },
@@ -56,6 +59,7 @@ const ADMIN_SECTIONS = [
       { to: '/admin/programs', label: 'Programs', icon: Layers },
       { to: '/admin/sections', label: 'Sections', icon: FolderOpen },
       { to: '/admin/subjects', label: 'Subjects', icon: BookOpen },
+      { to: '/admin/prospectus', label: 'Prospectus', icon: ScrollText },
       { to: '/admin/assignments', label: 'Subject Assignments', icon: Link2 },
       { to: '/admin/syllabi', label: 'Syllabi', icon: FileText },
     ],

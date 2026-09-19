@@ -14,11 +14,13 @@ import AdminTeacherDetail from './pages/admin/AdminTeacherDetail';
 import AdminPrograms from './pages/admin/AdminPrograms';
 import AdminSections from './pages/admin/AdminSections';
 import AdminSubjects from './pages/admin/AdminSubjects';
+import AdminProspectus from './pages/admin/AdminProspectus';
 import AdminAssignments from './pages/admin/AdminAssignments';
 import AdminLogs from './pages/admin/AdminLogs';
 import ComingSoon from './pages/admin/ComingSoon';
 import Announcements from './pages/Announcements';
 import Profile from './pages/Profile';
+import Prospectus from './pages/Prospectus';
 import Roster from './pages/Roster';
 import Materials from './pages/Materials';
 import Notifications from './pages/Notifications';
@@ -63,6 +65,7 @@ function App() {
             <Route path="/admin/programs" element={<ProtectedRoute allowedRoles={['admin']}><AdminPrograms /></ProtectedRoute>} />
             <Route path="/admin/sections" element={<ProtectedRoute allowedRoles={['admin']}><AdminSections /></ProtectedRoute>} />
             <Route path="/admin/subjects" element={<ProtectedRoute allowedRoles={['admin']}><AdminSubjects /></ProtectedRoute>} />
+            <Route path="/admin/prospectus" element={<ProtectedRoute allowedRoles={['admin']}><AdminProspectus /></ProtectedRoute>} />
             <Route path="/admin/assignments" element={<ProtectedRoute allowedRoles={['admin']}><AdminAssignments /></ProtectedRoute>} />
             <Route path="/admin/syllabi" element={<ProtectedRoute allowedRoles={['admin']}><ComingSoon title="Syllabi" subtitle="Official subject-level syllabus uploads and versioning are coming in the next iteration." /></ProtectedRoute>} />
             <Route path="/admin/announcements" element={<ProtectedRoute allowedRoles={['admin']}><Announcements /></ProtectedRoute>} />
@@ -73,6 +76,7 @@ function App() {
             <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><ComingSoon title="Settings" subtitle="Portal-wide configuration will be available here in the next iteration." /></ProtectedRoute>} />
 
             <Route path="/profile" element={<Profile />} />
+            <Route path="/prospectus" element={<Prospectus />} />
             <Route path="/announcements" element={<Announcements />} />
             <Route path="/roster" element={<Roster />} />
             <Route path="/materials" element={<Materials />} />

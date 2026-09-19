@@ -8,7 +8,7 @@ export default function AuthButton({ loading = false, loadingText = '', children
 
   return (
     <button
-      className={`w-full h-[50px] rounded-lg text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${styles}`}
+      className={`w-full h-[38px] rounded-lg text-[13px] font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${styles}`}
       disabled={loading || disabled}
       {...props}
     >

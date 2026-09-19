@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
@@ -17,8 +17,12 @@ import {
   AlertTriangle,
   ChevronRight,
   ArrowRight,
+  GraduationCap,
+  Award,
+  ScrollText,
 } from 'lucide-react';
 import { greeting, firstName, timeAgo, formatDue } from '../lib/status';
+import { computeStudentProgress, DEFAULT_BTLED_ICT_CURRICULUM } from '../data/curriculumData';
 
 const STATUS_ORDER = { red: 0, amber: 1, green: 2 };
 
@@ -32,6 +36,8 @@ export default function Dashboard() {
   const [liveSession, setLiveSession] = useState(null);
   const [modules, setModules] = useState([]);
   const [materials, setMaterials] = useState([]);
+  const [allProspectusSubjects, setAllProspectusSubjects] = useState([]);
+  const [studentEnrollments, setStudentEnrollments] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,8 +47,8 @@ export default function Dashboard() {
         const isTeacher = profile?.role === 'teacher';
         const enrRes = isTeacher
           ? Promise.resolve({ data: [], error: null })
-          : supabase.from('enrollments').select('subject_id').eq('student_id', profile?.id);
-        const [subjRes, actRes, annRes, sesRes, modRes, matRes, subRes, tsRes, enrData] = await Promise.all([
+          : supabase.from('enrollments').select('*, subject:subjects(*)').eq('student_id', profile?.id);
+        const [subjRes, actRes, annRes, sesRes, modRes, matRes, subRes, tsRes, enrData, allSubjRes] = await Promise.all([
           supabase.from('subjects').select('id, subject_code, subject_title'),
           supabase
             .from('activities')
@@ -72,6 +78,7 @@ export default function Dashboard() {
             ? supabase.from('teacher_subjects').select('subject_id')
             : Promise.resolve({ data: [], error: null }),
           enrRes,
+          supabase.from('subjects').select('*').order('order_index'),
         ]);
         if (!active) return;
 
@@ -87,6 +94,8 @@ export default function Dashboard() {
         if (!modRes.error) setModules((modRes.data || []).filter((m) => scoped(m.subject_id)));
         if (!matRes.error) setMaterials((matRes.data || []).filter((mat) => scoped(mat.module?.subject_id)));
         if (!subRes.error) setSubmissions(subRes.data || []);
+        if (!enrData.error && enrData.data) setStudentEnrollments(enrData.data);
+        if (!allSubjRes.error && allSubjRes.data?.length > 0) setAllProspectusSubjects(allSubjRes.data);
         if (isTeacher && !tsRes.error) {
           const mine = new Set((tsRes.data || []).map((r) => r.subject_id));
           setActivities((prev) => prev.filter((a) => a.subject_id == null || mine.has(a.subject_id)));
@@ -144,12 +153,26 @@ export default function Dashboard() {
   const dueSoonCount = activities.filter((a) => isDueSoon(a, mySubs.get(a.id))).length;
   const missingCount = isTeacher ? 0 : activities.filter((a) => isMissing(a, mySubs.get(a.id))).length;
 
-  const statCells = [
-    { label: 'Subjects', value: subjects.length, caption: 'Active subjects', icon: BookOpen, tone: 'text-primary-600 bg-primary-50' },
-    { label: isTeacher ? 'Awaiting Work' : 'To Do', value: pendingCount, caption: isTeacher ? 'Unsubmitted activities' : 'Requirements remaining', icon: ClipboardList, tone: 'text-amber-600 bg-amber-50' },
-    { label: 'Due Soon', value: dueSoonCount, caption: 'Within 7 days', icon: CalendarClock, tone: 'text-red-600 bg-red-50' },
-    { label: 'Live Class', value: liveSession ? 'Live' : 'None', caption: liveSession ? 'Class in session' : 'No active class', icon: Video, tone: 'text-emerald-600 bg-emerald-50' },
-  ];
+  const prospectusStats = useMemo(() => {
+    if (isTeacher) return null;
+    const subjectsToUse =
+      allProspectusSubjects.length > 0 ? allProspectusSubjects : DEFAULT_BTLED_ICT_CURRICULUM;
+    return computeStudentProgress(subjectsToUse, studentEnrollments);
+  }, [isTeacher, allProspectusSubjects, studentEnrollments]);
+
+  const statCells = isTeacher
+    ? [
+        { label: 'Subjects', value: subjects.length, caption: 'Active subjects', icon: BookOpen, tone: 'text-primary-600 bg-primary-50' },
+        { label: 'Awaiting Work', value: pendingCount, caption: 'Unsubmitted activities', icon: ClipboardList, tone: 'text-amber-600 bg-amber-50' },
+        { label: 'Due Soon', value: dueSoonCount, caption: 'Within 7 days', icon: CalendarClock, tone: 'text-red-600 bg-red-50' },
+        { label: 'Live Class', value: liveSession ? 'Live' : 'None', caption: liveSession ? 'Class in session' : 'No active class', icon: Video, tone: 'text-emerald-600 bg-emerald-50' },
+      ]
+    : [
+        { label: 'Enrolled Subjects', value: subjects.length, caption: 'Current semester', icon: BookOpen, tone: 'text-primary-600 bg-primary-50' },
+        { label: 'To Do', value: pendingCount, caption: 'Requirements remaining', icon: ClipboardList, tone: 'text-amber-600 bg-amber-50' },
+        { label: 'Degree Progress', value: `${prospectusStats?.progressPercent || 0}%`, caption: `${prospectusStats?.passedUnits || 0} / ${prospectusStats?.totalUnits || 122} Units`, icon: GraduationCap, tone: 'text-emerald-600 bg-emerald-50' },
+        { label: 'GWA', value: prospectusStats?.gwa || '—', caption: prospectusStats?.academicStanding || 'In Good Standing', icon: Award, tone: 'text-purple-600 bg-purple-50' },
+      ];
 
   const rosterRows = isTeacher
     ? activities.slice(0, 5).map((a) => ({
@@ -278,6 +301,52 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* Degree Progress & Curriculum Checklist Banner */}
+      {!isTeacher && prospectusStats && (
+        <div className="ws-card p-4 mb-4 bg-gradient-to-r from-slate-900 via-primary-950 to-primary-900 text-white rounded-xl shadow-xs border border-primary-950/40">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
+                <GraduationCap className="w-5 h-5 text-emerald-300" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[13.5px] font-bold text-white tracking-wide">
+                    BTLED ICT Academic Prospectus
+                  </h3>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    {prospectusStats.progressPercent}% Completed
+                  </span>
+                </div>
+                <p className="text-[12px] text-slate-300 mt-0.5">
+                  {prospectusStats.passedUnits} of {prospectusStats.totalUnits} credit units passed · {prospectusStats.remainingUnits} units remaining
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={() => navigate('/prospectus')}
+                className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-white text-primary-950 hover:bg-slate-100 transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <ScrollText className="w-3.5 h-3.5 text-primary-700" /> View Prospectus <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center gap-3">
+            <div className="flex-1 bg-white/15 rounded-full h-1.5 overflow-hidden">
+              <div
+                className="bg-emerald-400 h-full rounded-full transition-all duration-500"
+                style={{ width: `${prospectusStats.progressPercent}%` }}
+              />
+            </div>
+            <span className="text-[11px] font-medium text-slate-300 whitespace-nowrap">
+              {prospectusStats.academicStanding}
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Primary column */}
